@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Repo Doc Bot</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+
+<div id="landing">
+    <h1>Repo Doc Bot</h1>
+    <p>Paste a GitHub repository URL to start</p>
+
+    <input
+        type="text"
+        id="repo-url"
+        placeholder="https://github.com/user/repo"
+    />
+
+    <div class="landing-actions">
+        <button id="ingest-btn">Ingest Repository</button>
+        <button id="use-existing-btn" class="secondary">Use Existing Index</button>
+    </div>
+
+    <div id="ingest-status"></div>
+    <div id="ingest-spinner" class="spinner hidden"></div>
+</div>
+
+<script src="/static/ingest.js"></script>
+</body>
+</html>

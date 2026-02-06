@@ -1,0 +1,10 @@
+ollama
+pymongo
+fastapi
+pydantic
+uvicorn
+python-dotenv
+groq
+pytest
+bs4
+pytest-cov
