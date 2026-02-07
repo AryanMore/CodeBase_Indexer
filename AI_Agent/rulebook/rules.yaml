@@ -1,0 +1,19 @@
+# rulebook/rules.yaml
+
+expansion_rules:
+  - name: python_same_file_imports
+    allowed_intents: ["Explain", "Analyze", "Modify", "Refactor", "Debug"]
+    source_code_types: ["py:function", "py:class"]
+    allowed_requested_code_types:
+      - "py:imports"
+      - "py:class_header"
+    scope: "same_file"
+    max_chunks: 3
+
+  - name: python_callers_same_file
+    allowed_intents: ["Analyze", "Modify", "Debug"]
+    source_code_types: ["py:function"]
+    allowed_requested_code_types:
+      - "py:function"
+    scope: "same_file"
+    max_chunks: 2
