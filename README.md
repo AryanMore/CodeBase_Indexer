@@ -12,7 +12,7 @@ This project was built as a **capstone submission**, with a strong focus on **co
 * Ingest any public GitHub repository
 * Index the entire codebase locally
 * Structural chunking for Python and HTML
-* Vector-based retrieval using MongoDB
+* Vector-based retrieval using Qdrant vector database
 * Natural-language Q&A grounded in retrieved files
 * Clean, ChatGPT-style UI (ingest → chat)
 * End-to-end system tests
@@ -111,7 +111,7 @@ Conversational continuity (e.g. resolving references like "they") can be introdu
 
 * **Backend**: FastAPI
 * **Frontend**: Vanilla HTML, CSS, JavaScript
-* **Vector Store**: MongoDB
+* **Vector Store**: Qdrant (open-source vector database for storing embeddings)
 * **Embeddings**: Ollama (`nomic-embed-text`)
 * **LLM**: Groq (primary), Ollama fallback
 * **Parsing**: Python `ast`, BeautifulSoup
@@ -169,26 +169,36 @@ repo-doc-bot/
 ### Prerequisites
 
 * Python 3.11+
-* MongoDB (running locally)
+* Docker (for running Qdrant)
 * Ollama installed and running
 * Git
 
 ### Setup
 
+**1. Start Qdrant (using Docker):**
+
+```bash
+docker run -p 6333:6333 qdrant/qdrant
+```
+
+This starts the Qdrant vector database on `localhost:6333`.
+
+**2. Install Python dependencies:**
+
 ```bash
 pip install -r requirements.txt
 ```
 
-Create a `.env` file:
+**3. Create a `.env` file:**
 
 ```env
-MONGO_URI=mongodb://localhost:27017
-MONGO_DB_NAME=repo_doc_bot
-MONGO_COLLECTION_NAME=code_chunks
+QDRANT_HOST=localhost
+QDRANT_PORT=6333
+QDRANT_COLLECTION_NAME=code_embeddings
 GROQ_API_KEY=your_key_here
 ```
 
-Start the backend:
+**4. Start the backend:**
 
 ```bash
 uvicorn backend.main:app --reload
@@ -204,7 +214,7 @@ http://localhost:8000
 
 ## 🧪 Running Tests
 
-Make sure MongoDB and Ollama are running.
+Make sure Qdrant and Ollama are running.
 
 ```bash
 pytest
