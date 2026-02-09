@@ -3,7 +3,7 @@ from backend.infra.llm import chat
 
 def generate_answer(query: str, retrieved_chunks: list) -> str:
     context = "\n\n".join(
-        f"File: {chunk['file_path']}\n{chunk['content']}"
+        f"File: {chunk['file_path']}\n{chunk['text']}"
         for chunk in retrieved_chunks
     )
 

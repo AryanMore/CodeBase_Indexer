@@ -1,31 +1,22 @@
-import math
-from typing import List, Dict
-
-from backend.infra.db import get_collection
+from backend.infra.db import get_qdrant_client, get_collection_name
 
 
-def _cosine_similarity(a: List[float], b: List[float]) -> float:
-    dot = sum(x * y for x, y in zip(a, b))
-    norm_a = math.sqrt(sum(x * x for x in a))
-    norm_b = math.sqrt(sum(y * y for y in b))
-    if norm_a == 0 or norm_b == 0:
-        return 0.0
-    return dot / (norm_a * norm_b)
+def retrieve(query_embedding, top_k=5):
+    client = get_qdrant_client()
+    collection_name = get_collection_name()
 
+    results = client.query_points(
+        collection_name=collection_name,
+        query=query_embedding,
+        limit=top_k
+    )
 
-def retrieve(query_embedding: List[float], top_k: int = 3) -> List[Dict]:
-    collection = get_collection()
+    chunks = []
 
-    scored = []
-
-    for doc in collection.find({}, {"content": 1, "embedding": 1, "file_path": 1, "chunk_index": 1}):
-        score = _cosine_similarity(query_embedding, doc["embedding"])
-        scored.append({
-            "content": doc["content"],
-            "file_path": doc["file_path"],
-            "chunk_index": doc["chunk_index"],
-            "score": score
+    for point in results.points:
+        chunks.append({
+            "text": point.payload.get("text", ""),
+            "file_path": point.payload.get("file_path", "")
         })
 
-    scored.sort(key=lambda x: x["score"], reverse=True)
-    return scored[:top_k]
+    return chunks

@@ -1,26 +1,45 @@
 import os
-from pymongo import MongoClient
 from dotenv import load_dotenv
+from qdrant_client import QdrantClient
+from qdrant_client.models import VectorParams, Distance
 
 load_dotenv()
 
 _client = None
 
-
-def get_collection():
+def get_qdrant_client():
     global _client
 
     if _client is None:
-        mongo_uri = os.getenv("MONGO_URI")
-        _client = MongoClient(mongo_uri)
+        host = os.getenv("QDRANT_HOST", "localhost")
+        port = int(os.getenv("QDRANT_PORT", 6333))
+        _client = QdrantClient(host=host, port=port)
 
-    db_name = os.getenv("MONGO_DB_NAME")
-    collection_name = os.getenv("MONGO_COLLECTION_NAME")
+    return _client
 
-    db = _client[db_name]
-    return db[collection_name]
+
+def get_collection_name():
+    return os.getenv("QDRANT_COLLECTION_NAME", "code_embeddings")
+
+
+def create_collection(vector_size: int):
+    client = get_qdrant_client()
+    collection_name = get_collection_name()
+
+    collections = [c.name for c in client.get_collections().collections]
+
+    if collection_name not in collections:
+        client.create_collection(
+            collection_name=collection_name,
+            vectors_config=VectorParams(
+                size=vector_size,
+                distance=Distance.COSINE
+            )
+        )
 
 
 def clear_collection():
-    collection = get_collection()
-    collection.delete_many({})
+    client = get_qdrant_client()
+    collection_name = get_collection_name()
+
+    client.delete_collection(collection_name=collection_name)

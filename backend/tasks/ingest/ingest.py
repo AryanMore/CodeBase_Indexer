@@ -3,7 +3,7 @@ from pathlib import Path
 
 from backend.tasks.ingest.repo_clone.clone_repo import clone_repo
 from backend.tasks.ingest.embedding.dispatcher import embed_file
-from backend.tasks.ingest.vector_store.mongo_store import insert_chunks
+from backend.tasks.ingest.vector_store.qdrant_store import insert_chunks
 from backend.infra.db import clear_collection
 
 

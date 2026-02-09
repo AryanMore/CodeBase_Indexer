@@ -1,5 +1,5 @@
 ollama
-pymongo
+qdrant-client
 fastapi
 pydantic
 uvicorn

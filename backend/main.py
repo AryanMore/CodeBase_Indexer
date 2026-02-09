@@ -6,7 +6,7 @@ from pathlib import Path
 
 from backend.tasks.ingest.ingest import ingest
 from backend.tasks.query.query import query_repo
-from backend.infra.db import get_collection
+from backend.infra.db import get_qdrant_client, get_collection_name
 
 
 app = FastAPI(title="Repo Doc Bot")
@@ -41,9 +41,16 @@ def serve_frontend():
 
 @app.get("/has_index")
 def has_index():
-    collection = get_collection()
-    count = collection.count_documents({}, limit=1)
-    return {"has_index": count > 0}
+    client = get_qdrant_client()
+    collection_name = get_collection_name()
+
+    try:
+        info = client.get_collection(collection_name)
+        count = info.points_count
+        return {"has_index": count > 0}
+    except:
+        return {"has_index": False}
+
 
 
 @app.post("/ingest")
