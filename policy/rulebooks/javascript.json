@@ -1,0 +1,98 @@
+{
+  "chunk_rules": {
+
+    "javascript_import": {
+      "allow_expansion": false
+    },
+
+    "javascript_top_level_code": {
+      "allow_expansion": true,
+      "expansions": [
+        {
+          "via": "file_scope",
+          "allowed_target_types": [
+            "javascript_import"
+          ],
+          "cost": 0
+        },
+        {
+          "via": "uses",
+          "allowed_target_types": [
+            "javascript_function",
+            "javascript_class_header"
+          ],
+          "cost": 1
+        }
+      ]
+    },
+
+    "javascript_function": {
+      "allow_expansion": true,
+      "expansions": [
+        {
+          "via": "file_scope",
+          "allowed_target_types": [
+            "javascript_import"
+          ],
+          "cost": 0
+        },
+        {
+          "via": "uses",
+          "allowed_target_types": [
+            "javascript_function",
+            "javascript_class_header"
+          ],
+          "cost": 1
+        }
+      ]
+    },
+
+    "javascript_class_header": {
+      "allow_expansion": true,
+      "expansions": [
+        {
+          "via": "file_scope",
+          "allowed_target_types": [
+            "javascript_import"
+          ],
+          "cost": 0
+        },
+        {
+          "via": "member_functions",
+          "allowed_target_types": [
+            "javascript_class_function"
+          ],
+          "cost": 1
+        }
+      ]
+    },
+
+    "javascript_class_function": {
+      "allow_expansion": true,
+      "expansions": [
+        {
+          "via": "class_name",
+          "allowed_target_types": [
+            "javascript_class_header"
+          ],
+          "cost": 0
+        },
+        {
+          "via": "file_scope",
+          "allowed_target_types": [
+            "javascript_import"
+          ],
+          "cost": 0
+        },
+        {
+          "via": "uses",
+          "allowed_target_types": [
+            "javascript_function",
+            "javascript_class_header"
+          ],
+          "cost": 1
+        }
+      ]
+    }
+  }
+}

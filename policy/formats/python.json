@@ -1,0 +1,73 @@
+{
+  "chunk_types": [
+    {
+      "name": "python_docstring",
+      "fields": [
+        "chunk_type",
+        "file_path",
+        "chunk_number",
+        "content",
+        "embedding"
+      ]
+    },
+    {
+      "name": "python_import",
+      "fields": [
+        "chunk_type",
+        "file_path",
+        "chunk_number",
+        "content",
+        "embedding"
+      ]
+    },
+    {
+      "name": "python_top_level_code",
+      "fields": [
+        "chunk_type",
+        "file_path",
+        "chunk_number",
+        "content",
+        "embedding",
+        "uses"
+      ]
+    },
+    {
+      "name": "python_function",
+      "fields": [
+        "chunk_type",
+        "file_path",
+        "chunk_number",
+        "content",
+        "embedding",
+        "identifier",
+        "uses"
+      ]
+    },
+    {
+      "name": "python_class_header",
+      "fields": [
+        "chunk_type",
+        "file_path",
+        "chunk_number",
+        "content",
+        "embedding",
+        "identifier",
+        "member_functions",
+        "uses"
+      ]
+    },
+    {
+      "name": "python_class_function",
+      "fields": [
+        "chunk_type",
+        "file_path",
+        "chunk_number",
+        "content",
+        "embedding",
+        "identifier",
+        "class_name",
+        "uses"
+      ]
+    }
+  ]
+}
