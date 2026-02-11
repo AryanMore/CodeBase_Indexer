@@ -1,0 +1,106 @@
+{
+  "chunk_rules": {
+
+    "python_docstring": {
+      "allow_expansion": false
+    },
+
+    "python_import": {
+      "allow_expansion": false
+    },
+
+    "python_top_level_code": {
+      "allow_expansion": true,
+      "expansions": [
+        {
+          "via": "file_scope",
+          "allowed_target_types": [
+            "python_docstring",
+            "python_import"
+          ],
+          "cost": 0
+        },
+        {
+          "via": "uses",
+          "allowed_target_types": [
+            "python_function",
+            "python_class_header"
+          ],
+          "cost": 1
+        }
+      ]
+    },
+
+    "python_function": {
+      "allow_expansion": true,
+      "expansions": [
+        {
+          "via": "file_scope",
+          "allowed_target_types": [
+            "python_docstring",
+            "python_import"
+          ],
+          "cost": 0
+        },
+        {
+          "via": "uses",
+          "allowed_target_types": [
+            "python_function",
+            "python_class_header"
+          ],
+          "cost": 1
+        }
+      ]
+    },
+
+    "python_class_header": {
+      "allow_expansion": true,
+      "expansions": [
+        {
+          "via": "file_scope",
+          "allowed_target_types": [
+            "python_docstring",
+            "python_import"
+          ],
+          "cost": 0
+        },
+        {
+          "via": "member_functions",
+          "allowed_target_types": [
+            "python_class_function"
+          ],
+          "cost": 1
+        }
+      ]
+    },
+
+    "python_class_function": {
+      "allow_expansion": true,
+      "expansions": [
+        {
+          "via": "class_name",
+          "allowed_target_types": [
+            "python_class_header"
+          ],
+          "cost": 0
+        },
+        {
+          "via": "file_scope",
+          "allowed_target_types": [
+            "python_docstring",
+            "python_import"
+          ],
+          "cost": 0
+        },
+        {
+          "via": "uses",
+          "allowed_target_types": [
+            "python_function",
+            "python_class_header"
+          ],
+          "cost": 1
+        }
+      ]
+    }
+  }
+}

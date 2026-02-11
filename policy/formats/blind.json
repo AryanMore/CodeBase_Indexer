@@ -1,0 +1,14 @@
+{
+  "chunk_types": [
+    {
+      "name": "blind_chunk",
+      "fields": [
+        "chunk_type",
+        "file_path",
+        "chunk_number",
+        "content",
+        "embedding"
+      ]
+    }
+  ]
+}

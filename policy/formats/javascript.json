@@ -1,0 +1,63 @@
+{
+  "chunk_types": [
+    {
+      "name": "javascript_import",
+      "fields": [
+        "chunk_type",
+        "file_path",
+        "chunk_number",
+        "content",
+        "embedding"
+      ]
+    },
+    {
+      "name": "javascript_top_level_code",
+      "fields": [
+        "chunk_type",
+        "file_path",
+        "chunk_number",
+        "content",
+        "embedding",
+        "uses"
+      ]
+    },
+    {
+      "name": "javascript_function",
+      "fields": [
+        "chunk_type",
+        "file_path",
+        "chunk_number",
+        "content",
+        "embedding",
+        "identifier",
+        "uses"
+      ]
+    },
+    {
+      "name": "javascript_class_header",
+      "fields": [
+        "chunk_type",
+        "file_path",
+        "chunk_number",
+        "content",
+        "embedding",
+        "identifier",
+        "member_functions",
+        "uses"
+      ]
+    },
+    {
+      "name": "javascript_class_function",
+      "fields": [
+        "chunk_type",
+        "file_path",
+        "chunk_number",
+        "content",
+        "embedding",
+        "identifier",
+        "class_name",
+        "uses"
+      ]
+    }
+  ]
+}

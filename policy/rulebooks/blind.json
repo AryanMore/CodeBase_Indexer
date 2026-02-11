@@ -1,0 +1,7 @@
+{
+  "chunk_rules": {
+    "blind_chunk": {
+      "allow_expansion": false
+    }
+  }
+}
