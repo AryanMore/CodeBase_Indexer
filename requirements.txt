@@ -8,3 +8,6 @@ pytest
 pytest-cov
 bs4
 requests
+pytest-cov
+tree_sitter
+tree_sitter_languages
