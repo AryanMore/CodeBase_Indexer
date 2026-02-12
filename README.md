@@ -110,7 +110,7 @@ Conversational continuity (e.g. resolving references like "they") can be introdu
 ## 🖥️ Tech Stack
 
 * **Backend**: FastAPI
-* **Frontend**: Vanilla HTML, CSS, JavaScript
+* **Frontend**: Vanilla HTML, CSS, React,JavaScript
 * **Vector Store**: Qdrant (open-source vector database for storing embeddings)
 * **Embeddings**: Ollama (`nomic-embed-text`)
 * **LLM**: Groq (primary), Ollama fallback
@@ -210,6 +210,44 @@ Open in browser:
 http://localhost:8000
 ```
 
+---
+🌐 Running the  Frontend 
+
+Go to the frontend folder
+
+```bash
+cd frontend
+
+```
+Install dependencies:
+```bash
+npm install
+
+```
+⚙️ Frontend Environment Configuration
+
+Create a config.js file inside the src directory:
+```bash
+src/config.js
+```
+
+Add the backend URL-
+```bash
+REACT_APP_API_URL="BACKEND_URL"
+
+```
+▶️ Start the Frontend
+
+Run:
+```bash
+npm start
+
+```
+The frontend will start at:
+```bash
+http://localhost:3000/
+
+```
 ---
 
 ## 🧪 Running Tests

@@ -33,6 +33,7 @@ htmlcov/
 # Temporary cloned repositories
 backend/tasks/ingest/tmp/
 
+frontend/src/config.js
 # Local progress / planning docs
 progress.md
 
