@@ -1,6 +1,6 @@
 # graph/nodes/file_loader.py
-from graph.state import AgentState
-from tools.filesystem import FileSystemClient
+from AI_Agent.graph.state import AgentState
+from AI_Agent.tools.filesystem import FileSystemClient
 
 
 fs = FileSystemClient()

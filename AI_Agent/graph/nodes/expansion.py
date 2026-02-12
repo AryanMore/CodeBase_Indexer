@@ -1,8 +1,6 @@
-# graph/nodes/expansion.py
-from graph.state import AgentState
-from tools.rag import RAGClient
-from rulebook.validator import RulebookValidator, RulebookViolation
-
+from AI_Agent.graph.state import AgentState
+from AI_Agent.rulebook.validator import RulebookValidator, RulebookViolation
+from AI_Agent.tools.rag import RAGClient
 
 rag = RAGClient()
 validator = RulebookValidator()
@@ -11,6 +9,7 @@ validator = RulebookValidator()
 def expansion_node(state: AgentState) -> AgentState:
     plan = state["plan"]
 
+    # Expansion is optional and controlled by planning output.
     if not plan or not plan.requires_expansion:
         return state
 
@@ -21,7 +20,7 @@ def expansion_node(state: AgentState) -> AgentState:
     scope = "same_file"
     max_chunks = 3
 
-    # 🔒 RULEBOOK CHECK
+    # Rulebook gate: fail closed if expansion request violates policy.
     try:
         validator.validate_expansion(
             intent=state["intent"],
@@ -31,12 +30,13 @@ def expansion_node(state: AgentState) -> AgentState:
             max_chunks=max_chunks,
         )
     except RulebookViolation as e:
-        # Fail closed: no expansion
         state["expanded_chunks"] = []
         state["explanation"] = str(e)
         return state
 
+    # Context expansion call: fetch structurally-related chunks.
     expanded = rag.expand_context(
+        repo_url=state["repo_url"],
         source_chunk_ids=source_ids,
         requested_code_types=requested_code_types,
         scope=scope,

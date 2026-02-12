@@ -1,28 +1,28 @@
-# graph/nodes/planner.py
-import json
-from langchain.chat_models import ChatOpenAI
-from langchain.prompts import PromptTemplate
-from schemas.plan import Plan
-from graph.state import AgentState
-
-
-llm = ChatOpenAI(temperature=0)
-
-prompt = PromptTemplate(
-    template=open("prompts/planner.txt").read(),
-    input_variables=["intent", "user_query"],
-)
+from AI_Agent.graph.state import AgentState
+from AI_Agent.infra.llm import chat, extract_json, render_prompt
+from AI_Agent.schemas.plan import Plan
 
 
 def planner_node(state: AgentState) -> AgentState:
-    response = llm.predict(
-        prompt.format(
-            intent=state["intent"].value,
-            user_query=state["user_query"],
-        )
+    prompt = render_prompt(
+        "AI_Agent/prompts/planner.txt",
+        {
+            "intent": state["intent"].value,
+            "user_query": state["user_query"],
+        },
     )
+    response = chat(prompt)
 
-    plan_data = json.loads(response)
-    state["plan"] = Plan(**plan_data)
+    try:
+        plan_data = extract_json(response)
+        state["plan"] = Plan(**plan_data)
+    except Exception:
+        state["plan"] = Plan(
+            intent=state["intent"].value,
+            steps=["Retrieve relevant chunks", "Answer with grounded context"],
+            requires_expansion=True,
+            requires_full_file=False,
+            target_files=None,
+        )
 
     return state

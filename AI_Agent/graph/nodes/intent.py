@@ -1,22 +1,17 @@
-# graph/nodes/intent.py
-from langchain.chat_models import ChatOpenAI
-from langchain.prompts import PromptTemplate
-from schemas.intent import Intent
-from graph.state import AgentState
-
-
-llm = ChatOpenAI(temperature=0)
-
-prompt = PromptTemplate(
-    template=open("prompts/intent.txt").read(),
-    input_variables=["user_query"],
-)
+from AI_Agent.graph.state import AgentState
+from AI_Agent.infra.llm import chat, render_prompt
 
 
 def intent_node(state: AgentState) -> AgentState:
-    response = llm.predict(
-        prompt.format(user_query=state["user_query"])
-    ).strip()
+    prompt = render_prompt(
+        "AI_Agent/prompts/intent.txt",
+        {"user_query": state["user_query"]},
+    )
+    response = chat(prompt, max_tokens=20).strip()
+    from AI_Agent.schemas.intent import Intent
 
-    state["intent"] = Intent(response)
+    try:
+        state["intent"] = Intent(response)
+    except Exception:
+        state["intent"] = Intent.EXPLAIN
     return state

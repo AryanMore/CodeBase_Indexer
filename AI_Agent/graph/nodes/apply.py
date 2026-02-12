@@ -1,6 +1,6 @@
 # graph/nodes/apply.py
-from graph.state import AgentState
-from tools.git_ops import GitClient
+from AI_Agent.graph.state import AgentState
+from AI_Agent.tools.git_ops import GitClient
 
 
 git = GitClient()

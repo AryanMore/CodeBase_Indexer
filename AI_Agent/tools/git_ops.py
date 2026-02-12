@@ -1,12 +1,32 @@
-# tools/git_ops.py
-from typing import Optional
-from schemas.diff import DiffBundle
+import subprocess
+import tempfile
+import uuid
+from pathlib import Path
+
+from AI_Agent.schemas.diff import DiffBundle, FileDiff
 
 
 class GitClient:
     """
     Git + patch operations.
+
+    This client intentionally generates and applies *real git-format patches*
+    so downstream `git apply` works without malformed headers like `a/None`.
     """
+
+    def __init__(self, repo_root: str = "."):
+        self.repo_root = Path(repo_root).resolve()
+        self._bundles: dict[str, DiffBundle] = {}
+
+    def _run(self, args: list[str]) -> str:
+        result = subprocess.run(
+            args,
+            cwd=self.repo_root,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+        return result.stdout
 
     def propose_changes(
         self,
@@ -14,20 +34,66 @@ class GitClient:
         affected_files: list[str],
     ) -> DiffBundle:
         """
-        Generates a diff bundle.
-        Does NOT write files.
+        Capture the current working-tree diff as a structured bundle.
+
+        Notes:
+        - Uses `git diff -- <paths>` to ensure canonical patch headers.
+        - New/deleted files are represented using `/dev/null` as expected by git.
+        - No files are changed by this method.
         """
-        raise NotImplementedError("Git.propose_changes not implemented")
+        diff_cmd = ["git", "diff", "--binary", "--"]
+        diff_cmd.extend(affected_files or ["."])
+        patch = self._run(diff_cmd)
+
+        bundle = DiffBundle(
+            bundle_id=str(uuid.uuid4()),
+            goal=goal,
+            files=[
+                FileDiff(
+                    file_path=",".join(affected_files) if affected_files else "WORKTREE",
+                    diff=patch,
+                )
+            ],
+            explanation="Patch captured from git worktree in canonical format.",
+        )
+        self._bundles[bundle.bundle_id] = bundle
+        return bundle
 
     def apply_changes(self, diff_bundle_id: str) -> None:
         """
-        Applies an approved diff bundle.
-        Must fail closed if approval is missing.
+        Apply a previously captured patch with `git apply --index`.
         """
-        raise NotImplementedError("Git.apply_changes not implemented")
+        bundle = self._bundles.get(diff_bundle_id)
+        if not bundle:
+            raise RuntimeError(f"Unknown diff bundle id: {diff_bundle_id}")
+
+        patch_text = "\n\n".join(file_diff.diff for file_diff in bundle.files if file_diff.diff)
+        if not patch_text.strip():
+            return
+
+        with tempfile.NamedTemporaryFile("w", suffix=".patch", delete=False) as tmp:
+            tmp.write(patch_text)
+            tmp_path = Path(tmp.name)
+
+        try:
+            self._run(["git", "apply", "--index", str(tmp_path)])
+        finally:
+            tmp_path.unlink(missing_ok=True)
 
     def git_diff(self) -> str:
         """
         Shows pending changes.
         """
-        raise NotImplementedError("Git.git_diff not implemented")
+        return self._run(["git", "diff", "--binary"])
+
+    def export_commit_patch(self, commit_ref: str, output_path: str) -> str:
+        """
+        Export a stable patch for a commit using raw git output.
+
+        This is the safest format to share/apply later:
+          git show --format=email <commit>
+        """
+        patch = self._run(["git", "show", "--format=email", commit_ref])
+        out = self.repo_root / output_path
+        out.write_text(patch, encoding="utf-8")
+        return str(out)
