@@ -4,11 +4,12 @@ import uuid
 
 
 def insert_chunks(chunks):
-    client = get_qdrant_client()
-    collection_name = get_collection_name()
 
     if not chunks:
         return
+
+    client = get_qdrant_client()
+    collection_name = get_collection_name()
 
     vector_size = len(chunks[0]["embedding"])
     create_collection(vector_size)
@@ -16,16 +17,33 @@ def insert_chunks(chunks):
     points = []
 
     for chunk in chunks:
-        text = chunk.get("text") or chunk.get("content") or chunk.get("chunk")
+
+        payload = {
+            "content": chunk.get("content"),
+            "language": chunk.get("language"),
+            "chunk_type": chunk.get("chunk_type"),
+            "file_path": chunk.get("file_path"),
+            "chunk_number": chunk.get("chunk_number"),
+        }
+
+        # Optional metadata
+        if "identifier" in chunk:
+            payload["identifier"] = chunk["identifier"]
+
+        if "uses" in chunk:
+            payload["uses"] = chunk["uses"]
+
+        if "class_name" in chunk:
+            payload["class_name"] = chunk["class_name"]
+
+        if "member_functions" in chunk:
+            payload["member_functions"] = chunk["member_functions"]
 
         points.append(
             PointStruct(
                 id=str(uuid.uuid4()),
                 vector=chunk["embedding"],
-                payload={
-                    "text": text,
-                    "file_path": chunk.get("file_path", "")
-                }
+                payload=payload
             )
         )
 

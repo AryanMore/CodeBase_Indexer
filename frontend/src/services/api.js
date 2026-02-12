@@ -1,6 +1,6 @@
 import { API_URL } from "../config";
 
-const API = API_URL;
+const API = "http://127.0.0.1:8000";
 
 export const apiGet = async (url) => {
 

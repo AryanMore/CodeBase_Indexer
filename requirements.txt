@@ -8,3 +8,5 @@ groq
 pytest
 bs4
 pytest-cov
+tree_sitter
+tree_sitter_languages

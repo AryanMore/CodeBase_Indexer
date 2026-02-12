@@ -15,7 +15,7 @@ def retrieve(query_embedding, top_k=5):
 
     for point in results.points:
         chunks.append({
-            "text": point.payload.get("text", ""),
+            "text": point.payload.get("content", ""),
             "file_path": point.payload.get("file_path", "")
         })
 
