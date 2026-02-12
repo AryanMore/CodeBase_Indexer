@@ -116,9 +116,18 @@ def process_repository(repo_path: Path):
 
         # Phase C: Embed + Insert
         for chunk in language_chunks:
-            embedding = embed_text(chunk["content"])
+            content = chunk.get("content", "").strip()
+            if not content:
+                continue  # skip empty chunks
+
+            embedding = embed_text(content)
+
+            if not embedding or len(embedding) == 0:
+                continue  # skip invalid embeddings
+
             chunk["embedding"] = embedding
             insert_chunks([chunk])
+
 
         # Flush memory
         language_chunks.clear()
@@ -156,6 +165,14 @@ def process_repository(repo_path: Path):
         for idx, chunk in enumerate(chunks):
             chunk["file_path"] = str(relative_path)
             chunk["chunk_number"] = idx
-            embedding = embed_text(chunk["content"])
+            content = chunk.get("content", "").strip()
+            if not content:
+                continue  # skip empty chunks
+
+            embedding = embed_text(content)
+
+            if not embedding or len(embedding) == 0:
+                continue  # skip invalid embeddings
+
             chunk["embedding"] = embedding
             insert_chunks([chunk])

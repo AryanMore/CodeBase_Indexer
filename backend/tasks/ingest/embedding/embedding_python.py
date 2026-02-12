@@ -12,11 +12,10 @@ implements_uses = True
 # Helpers
 # -------------------------
 
-def claim_span(start: int, end: int, used_lines: set):
+def claim_span(start, end, used_lines):
     for i in range(start, end):
-        if i in used_lines:
-            raise RuntimeError(f"Line {i} already claimed")
         used_lines.add(i)
+
 
 
 def extract_content(lines: List[str], start: int, end: int) -> str:
