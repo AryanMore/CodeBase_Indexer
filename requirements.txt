@@ -4,7 +4,7 @@ fastapi
 pydantic
 uvicorn
 python-dotenv
-groq
 pytest
-bs4
 pytest-cov
+bs4
+requests
