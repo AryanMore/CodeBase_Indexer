@@ -59,7 +59,7 @@ def resolve_uses(language_chunks: List[Dict]):
 # Main Dispatcher Entry
 # -------------------------
 
-def process_repository(repo_path: Path):
+def process_repository(repo_path: Path, repo_url: str | None = None):
 
     language_modules = load_language_modules()
     processed_files: Set[Path] = set()
@@ -103,6 +103,8 @@ def process_repository(repo_path: Path):
                 for idx, chunk in enumerate(chunks):
                     chunk["file_path"] = str(relative_path)
                     chunk["chunk_number"] = idx
+                    if repo_url:
+                        chunk["repo_url"] = repo_url
 
                 language_chunks.extend(chunks)
                 processed_files.add(file_path)
@@ -165,6 +167,8 @@ def process_repository(repo_path: Path):
         for idx, chunk in enumerate(chunks):
             chunk["file_path"] = str(relative_path)
             chunk["chunk_number"] = idx
+            if repo_url:
+                chunk["repo_url"] = repo_url
             content = chunk.get("content", "").strip()
             if not content:
                 continue  # skip empty chunks

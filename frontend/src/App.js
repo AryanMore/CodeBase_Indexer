@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import Landing from "./components/Landing";
 import Chat from "./components/Chat";
 
-import { apiGet, apiPost } from "./services/api";
+import { apiGet, apiPost, apiAgentQuery } from "./services/api";
 
 import "./styles/main.css";
 
@@ -18,6 +18,8 @@ function App() {
 
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState([]);
+  const [useAgent, setUseAgent] = useState(true);
+  const [agentSessionId, setAgentSessionId] = useState(null);
 
 
   // ================= NAVIGATION =================
@@ -27,6 +29,7 @@ function App() {
     setMessages([]);
     setQuestion("");
     setStatus("");
+    setAgentSessionId(null);
   };
 
 
@@ -95,17 +98,36 @@ function App() {
 
     if (!question.trim()) return;
 
+    const currentQuestion = question;
+
     setMessages(prev => [
       ...prev,
-      { text: question, sender: "user" }
+      { text: currentQuestion, sender: "user" }
     ]);
 
     setQuestion("");
 
     try {
 
+      if (useAgent) {
+        const data = await apiAgentQuery(repoUrl, currentQuestion, agentSessionId);
+        if (data.session_id) {
+          setAgentSessionId(data.session_id);
+        }
+
+        setMessages(prev => [
+          ...prev,
+          {
+            text: data.answer,
+            sender: "bot"
+          }
+        ]);
+
+        return;
+      }
+
       const data = await apiPost("/query", {
-        question
+        question: currentQuestion
       });
 
       setMessages(prev => [
@@ -153,7 +175,9 @@ function App() {
           question={question}
           setQuestion={setQuestion}
           sendQuestion={sendQuestion}
-          goBack={goBack}   // 👈 NEW
+          goBack={goBack}
+          useAgent={useAgent}
+          setUseAgent={setUseAgent}
         />
 
       )}

@@ -40,7 +40,9 @@ function Chat({
   question,
   setQuestion,
   sendQuestion,
-  goBack
+  goBack,
+  useAgent,
+  setUseAgent,
 }) {
 
   return (
@@ -62,6 +64,17 @@ function Chat({
 
       </div>
 
+
+      <div className="chat-mode-toggle">
+        <label>
+          <input
+            type="checkbox"
+            checked={useAgent}
+            onChange={(e) => setUseAgent(e.target.checked)}
+          />
+          Use AI Agent (context expansion)
+        </label>
+      </div>
 
       {/* CHAT BOX */}
       <div className="chat-box">

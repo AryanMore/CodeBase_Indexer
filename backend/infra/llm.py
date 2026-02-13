@@ -1,8 +1,6 @@
 import os
 import ollama
 from dotenv import load_dotenv
-from groq import Groq
-
 from backend.config import (
     EMBEDDING_MODEL,
     USE_GROQ,
@@ -29,6 +27,7 @@ def get_groq_client():
         api_key = os.getenv("GROQ_API_KEY")
         if not api_key:
             raise RuntimeError("GROQ_API_KEY not set in environment")
+        from groq import Groq
         _groq = Groq(api_key=api_key)
     return _groq
 

@@ -1,9 +1,12 @@
 from typing import Optional
 
+from AI_Agent.schemas.diff import DiffBundle
+
 
 class AgentMemory:
     def __init__(self):
         self._state: dict[str, list[dict]] = {}
+        self._pending_diffs: dict[str, DiffBundle] = {}
 
     def add_turn(self, session_id: str, user_query: str, response: str) -> None:
         self._state.setdefault(session_id, []).append(
@@ -12,6 +15,15 @@ class AgentMemory:
 
     def get_history(self, session_id: str) -> list[dict]:
         return self._state.get(session_id, [])
+
+    def set_pending_diff(self, session_id: str, bundle: DiffBundle) -> None:
+        self._pending_diffs[session_id] = bundle
+
+    def get_pending_diff(self, session_id: str) -> Optional[DiffBundle]:
+        return self._pending_diffs.get(session_id)
+
+    def clear_pending_diff(self, session_id: str) -> None:
+        self._pending_diffs.pop(session_id, None)
 
 
 memory = AgentMemory()

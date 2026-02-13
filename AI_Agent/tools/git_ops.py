@@ -28,19 +28,14 @@ class GitClient:
         )
         return result.stdout
 
+    def store_bundle(self, bundle: DiffBundle) -> None:
+        self._bundles[bundle.bundle_id] = bundle
+
     def propose_changes(
         self,
         goal: str,
         affected_files: list[str],
     ) -> DiffBundle:
-        """
-        Capture the current working-tree diff as a structured bundle.
-
-        Notes:
-        - Uses `git diff -- <paths>` to ensure canonical patch headers.
-        - New/deleted files are represented using `/dev/null` as expected by git.
-        - No files are changed by this method.
-        """
         diff_cmd = ["git", "diff", "--binary", "--"]
         diff_cmd.extend(affected_files or ["."])
         patch = self._run(diff_cmd)
@@ -60,9 +55,6 @@ class GitClient:
         return bundle
 
     def apply_changes(self, diff_bundle_id: str) -> None:
-        """
-        Apply a previously captured patch with `git apply --index`.
-        """
         bundle = self._bundles.get(diff_bundle_id)
         if not bundle:
             raise RuntimeError(f"Unknown diff bundle id: {diff_bundle_id}")
@@ -80,19 +72,16 @@ class GitClient:
         finally:
             tmp_path.unlink(missing_ok=True)
 
+    def commit_and_push(self, message: str) -> str:
+        self._run(["git", "commit", "-m", message])
+        branch = self._run(["git", "rev-parse", "--abbrev-ref", "HEAD"]).strip()
+        self._run(["git", "push", "origin", branch])
+        return branch
+
     def git_diff(self) -> str:
-        """
-        Shows pending changes.
-        """
         return self._run(["git", "diff", "--binary"])
 
     def export_commit_patch(self, commit_ref: str, output_path: str) -> str:
-        """
-        Export a stable patch for a commit using raw git output.
-
-        This is the safest format to share/apply later:
-          git show --format=email <commit>
-        """
         patch = self._run(["git", "show", "--format=email", commit_ref])
         out = self.repo_root / output_path
         out.write_text(patch, encoding="utf-8")

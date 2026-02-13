@@ -168,7 +168,7 @@ repo-doc-bot/
 
 ### Prerequisites
 
-* Python 3.11+
+* Python 3.10+ (3.11+ recommended)
 * Docker (for running Qdrant)
 * Ollama installed and running
 * Git
@@ -189,12 +189,22 @@ This starts the Qdrant vector database on `localhost:6333`.
 pip install -r requirements.txt
 ```
 
+**Optional (Groq backend):**
+
+```bash
+pip install groq
+```
+
+Only needed if you set `USE_GROQ=true`.
+
 **3. Create a `.env` file:**
 
 ```env
 QDRANT_HOST=localhost
 QDRANT_PORT=6333
 QDRANT_COLLECTION_NAME=code_embeddings
+# Optional: only required when USE_GROQ=true
+USE_GROQ=false
 GROQ_API_KEY=your_key_here
 ```
 
@@ -226,15 +236,9 @@ npm install
 ```
 ⚙️ Frontend Environment Configuration
 
-Create a config.js file inside the src directory:
+Set backend URL using an environment variable (optional, defaults to `http://localhost:8000`):
 ```bash
-src/config.js
-```
-
-Add the backend URL-
-```bash
-REACT_APP_API_URL="BACKEND_URL"
-
+export REACT_APP_API_URL="http://localhost:8000"
 ```
 ▶️ Start the Frontend
 
@@ -248,6 +252,9 @@ The frontend will start at:
 http://localhost:3000/
 
 ```
+
+In Chat, keep **"Use AI Agent (context expansion)"** enabled to route questions through the AI Agent orchestration (`/agent/query`) instead of plain `/query`.
+For code-modification requests, the AI Agent now returns a proposal first and will only apply + push after you explicitly reply **APPROVE** in chat.
 ---
 
 ## 🧪 Running Tests

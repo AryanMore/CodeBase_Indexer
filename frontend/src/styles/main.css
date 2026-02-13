@@ -239,3 +239,15 @@ body {
   from { transform: translateY(30px); }
   to { transform: translateY(0); }
 }
+
+
+.chat-mode-toggle {
+  text-align: left;
+  margin: 4px 0 10px;
+  color: #374151;
+  font-size: 14px;
+}
+
+.chat-mode-toggle input {
+  margin-right: 8px;
+}

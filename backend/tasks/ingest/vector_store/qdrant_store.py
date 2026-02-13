@@ -39,6 +39,9 @@ def insert_chunks(chunks):
         if "member_functions" in chunk:
             payload["member_functions"] = chunk["member_functions"]
 
+        if "repo_url" in chunk:
+            payload["repo_url"] = chunk["repo_url"]
+
         points.append(
             PointStruct(
                 id=str(uuid.uuid4()),

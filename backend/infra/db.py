@@ -43,3 +43,18 @@ def clear_collection():
     collection_name = get_collection_name()
 
     client.delete_collection(collection_name=collection_name)
+
+
+class _QdrantCollectionAdapter:
+    def __init__(self, client, collection_name):
+        self.client = client
+        self.collection_name = collection_name
+
+    def count_documents(self, _filter=None):
+        result = self.client.count(collection_name=self.collection_name, exact=True)
+        return result.count
+
+
+def get_collection():
+    """Backward-compatible adapter for legacy tests expecting a Mongo-style collection."""
+    return _QdrantCollectionAdapter(get_qdrant_client(), get_collection_name())

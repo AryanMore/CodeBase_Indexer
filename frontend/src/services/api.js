@@ -1,6 +1,4 @@
-import { API_URL } from "../config";
-
-const API = API_URL;
+const API = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
 export const apiGet = async (url) => {
   const res = await fetch(`${API}${url}`);
@@ -15,6 +13,21 @@ export const apiPost = async (url, body) => {
       "Content-Type": "application/json"
     },
     body: JSON.stringify(body)
+  });
+
+  if (!res.ok) throw new Error();
+
+  return res.json();
+};
+
+
+export const apiAgentQuery = async (repo_url, question, session_id) => {
+  const res = await fetch(`${API}/agent/query`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ repo_url, question, session_id })
   });
 
   if (!res.ok) throw new Error();

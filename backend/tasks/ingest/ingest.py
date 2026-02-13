@@ -15,7 +15,7 @@ def ingest(repo_url: str) -> None:
     try:
         repo_path = clone_repo(repo_url)
 
-        process_repository(repo_path)
+        process_repository(repo_path, repo_url=repo_url)
 
     finally:
         if repo_path and repo_path.exists():

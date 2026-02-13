@@ -16,6 +16,14 @@ DEFAULT_RULES = [
         "max_chunks": 3,
     },
     {
+        "name": "javascript_same_file_functions",
+        "allowed_intents": ["Explain", "Analyze", "Modify", "Refactor", "Debug"],
+        "source_code_types": ["js:function", "js:class_header"],
+        "allowed_requested_code_types": ["js:function"],
+        "scope": "same_file",
+        "max_chunks": 3,
+    },
+    {
         "name": "python_callers_same_file",
         "allowed_intents": ["Analyze", "Modify", "Debug"],
         "source_code_types": ["py:function"],
