@@ -41,7 +41,6 @@ function App() {
 
     setLoading(true);
     setStatus("Indexing repository...");
-
     try {
 
       await apiPost("/ingest", {

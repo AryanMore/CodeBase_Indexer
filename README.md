@@ -233,8 +233,7 @@ src/config.js
 
 Add the backend URL-
 ```bash
-REACT_APP_API_URL="BACKEND_URL"
-
+API_URL="BACKEND_URL"
 ```
 ▶️ Start the Frontend
 
