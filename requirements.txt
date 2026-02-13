@@ -10,3 +10,4 @@ bs4
 requests
 tree_sitter
 tree_sitter_languages
+groq
