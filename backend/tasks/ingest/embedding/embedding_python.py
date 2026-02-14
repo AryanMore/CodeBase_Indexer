@@ -261,7 +261,7 @@ def extract_chunks(file_path: Path) -> List[Dict]:
     if doc:
         chunks.append(doc)
 
-    # 2️⃣ Classes (member functions → header)
+    # 2️⃣ Classes (member functions -> header)
     chunks.extend(extract_classes(tree, lines, used_lines))
 
     # 3️⃣ Top-Level Functions

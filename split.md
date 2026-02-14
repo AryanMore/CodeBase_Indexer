@@ -21,9 +21,9 @@ Example:
 file: service.py
 function: process_data
 
-Chunk 12 → first half
-Chunk 13 → second half
-Chunk 14 → third half
+Chunk 12 -> first half
+Chunk 13 -> second half
+Chunk 14 -> third half
 ```
 
 All share:
@@ -171,7 +171,7 @@ Fetch:
 Sort:
 
 ```
-12 → 13 → 14
+12 -> 13 -> 14
 ```
 
 Merge content.
@@ -253,8 +253,8 @@ Imports/docstrings skip this.
 Because:
 
 ```
-utils.py → process_data
-service.py → process_data
+utils.py -> process_data
+service.py -> process_data
 ```
 
 Same identifier, different file.
