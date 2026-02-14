@@ -1,0 +1,75 @@
+{
+  "chunk_types": [
+    {
+      "name": "html_main_section",
+      "fields": [
+        "chunk_type",
+        "file_path",
+        "chunk_number",
+        "content",
+        "embedding"
+      ]
+    },
+    {
+      "name": "html_navigation_block",
+      "fields": [
+        "chunk_type",
+        "file_path",
+        "chunk_number",
+        "content",
+        "embedding"
+      ]
+    },
+    {
+      "name": "html_component_block",
+      "fields": [
+        "chunk_type",
+        "file_path",
+        "chunk_number",
+        "content",
+        "embedding"
+      ]
+    },
+    {
+      "name": "html_form_block",
+      "fields": [
+        "chunk_type",
+        "file_path",
+        "chunk_number",
+        "content",
+        "embedding"
+      ]
+    },
+    {
+      "name": "html_script_block",
+      "fields": [
+        "chunk_type",
+        "file_path",
+        "chunk_number",
+        "content",
+        "embedding",
+        "external_scripts"
+      ]
+    },
+    {
+      "name": "html_style_block",
+      "fields": [
+        "chunk_type",
+        "file_path",
+        "chunk_number",
+        "content",
+        "embedding"
+      ]
+    },
+    {
+      "name": "html_top_level_markup",
+      "fields": [
+        "chunk_type",
+        "file_path",
+        "chunk_number",
+        "content",
+        "embedding"
+      ]
+    }
+  ]
+}

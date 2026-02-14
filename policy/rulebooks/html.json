@@ -1,0 +1,90 @@
+{
+  "chunk_rules": {
+
+    "html_main_section": {
+      "allow_expansion": true,
+      "expansions": [
+        {
+          "via": "file_scope",
+          "allowed_target_types": [
+            "html_navigation_block",
+            "html_component_block",
+            "html_form_block",
+            "html_script_block",
+            "html_style_block",
+            "html_top_level_markup"
+          ],
+          "cost": 0
+        }
+      ]
+    },
+
+    "html_navigation_block": {
+      "allow_expansion": true,
+      "expansions": [
+        {
+          "via": "file_scope",
+          "allowed_target_types": [
+            "html_main_section",
+            "html_component_block",
+            "html_form_block"
+          ],
+          "cost": 0
+        }
+      ]
+    },
+
+    "html_component_block": {
+      "allow_expansion": true,
+      "expansions": [
+        {
+          "via": "file_scope",
+          "allowed_target_types": [
+            "html_main_section",
+            "html_script_block",
+            "html_form_block"
+          ],
+          "cost": 0
+        }
+      ]
+    },
+
+    "html_form_block": {
+      "allow_expansion": true,
+      "expansions": [
+        {
+          "via": "file_scope",
+          "allowed_target_types": [
+            "html_main_section",
+            "html_component_block",
+            "html_script_block"
+          ],
+          "cost": 0
+        }
+      ]
+    },
+
+    "html_script_block": {
+      "allow_expansion": true,
+      "expansions": [
+        {
+          "via": "external_scripts",
+          "allowed_target_types": [
+            "javascript_function",
+            "javascript_class_header",
+            "javascript_top_level_code"
+          ],
+          "cost": 1
+        }
+      ]
+    },
+
+    "html_style_block": {
+      "allow_expansion": false
+    },
+
+    "html_top_level_markup": {
+      "allow_expansion": false
+    }
+  }
+}

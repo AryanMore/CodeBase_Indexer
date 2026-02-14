@@ -1,0 +1,29 @@
+Phase 1 — Core deliverable (non-negotiable)
+
+“Interactive repository understanding via natural language queries.”
+
+This includes:
+
+Repo ingestion
+
+Repo-wide indexing
+
+Retrieval-based Q&A
+
+Minimal UI
+
+Testing + setup docs
+
+This is what you commit to finishing.
+
+Phase 2 — Optional enhancement (only if time permits)
+
+“Auto-generated repository overview document.”
+
+This is framed as:
+
+An additional output
+
+Built on the same index
+
+Not required for core success

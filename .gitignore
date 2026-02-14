@@ -1,0 +1,45 @@
+# =====================
+# Python
+# =====================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+.env
+venv/
+.venv/
+.env.*
+
+# =====================
+# OS / Editor junk
+# =====================
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# =====================
+# Testing
+# =====================
+.pytest_cache/
+coverage.xml
+htmlcov/
+
+# =====================
+# Project-specific
+# =====================
+
+# Temporary cloned repositories
+backend/tasks/ingest/tmp/
+
+frontend/src/config.js
+# Local progress / planning docs
+progress.md
+
+# MongoDB local data (if any)
+data/
+
+# Logs
+*.log
