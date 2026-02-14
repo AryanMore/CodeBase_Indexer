@@ -1,11 +1,12 @@
 import os
 from dotenv import load_dotenv
 from qdrant_client import QdrantClient
-from qdrant_client.models import VectorParams, Distance
+from qdrant_client.models import Distance, PayloadSchemaType, VectorParams
 
 load_dotenv()
 
 _client = None
+
 
 def get_qdrant_client():
     global _client
@@ -22,6 +23,29 @@ def get_collection_name():
     return os.getenv("QDRANT_COLLECTION_NAME", "code_embeddings")
 
 
+def _ensure_payload_indexes(client: QdrantClient, collection_name: str):
+    # Filter-heavy query paths (/rag/retrieve and /rag/expand) rely on these fields.
+    # Keeping payload indexes in place avoids expensive full scans.
+    indexed_fields = {
+        "repo_url": PayloadSchemaType.KEYWORD,
+        "file_path": PayloadSchemaType.KEYWORD,
+        "chunk_type": PayloadSchemaType.KEYWORD,
+    }
+
+    for field_name, schema in indexed_fields.items():
+        try:
+            client.create_payload_index(
+                collection_name=collection_name,
+                field_name=field_name,
+                field_schema=schema,
+                wait=True,
+            )
+        except Exception:
+            # Index may already exist, or backend may return a non-fatal conflict.
+            # Query path remains functional either way.
+            pass
+
+
 def create_collection(vector_size: int):
     client = get_qdrant_client()
     collection_name = get_collection_name()
@@ -31,11 +55,10 @@ def create_collection(vector_size: int):
     if collection_name not in collections:
         client.create_collection(
             collection_name=collection_name,
-            vectors_config=VectorParams(
-                size=vector_size,
-                distance=Distance.COSINE
-            )
+            vectors_config=VectorParams(size=vector_size, distance=Distance.COSINE),
         )
+
+    _ensure_payload_indexes(client, collection_name)
 
 
 def clear_collection():

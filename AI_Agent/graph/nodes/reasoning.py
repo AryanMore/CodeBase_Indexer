@@ -1,8 +1,20 @@
+import os
 from collections import defaultdict
 
 from AI_Agent.graph.state import AgentState
 from AI_Agent.infra.llm import chat, render_prompt
 from AI_Agent.memory.store import memory
+
+MAX_CONTEXT_CHARS_PER_CHUNK = int(os.getenv("MAX_CONTEXT_CHARS_PER_CHUNK", "1200"))
+REASONING_MAX_TOKENS = int(os.getenv("REASONING_MAX_TOKENS", "180"))
+
+
+def _clip(text: str, max_chars: int) -> str:
+    if max_chars <= 0:
+        return text
+    if len(text) <= max_chars:
+        return text
+    return text[:max_chars] + "\n... [truncated for latency]"
 
 
 def _build_context(chunks):
@@ -20,7 +32,7 @@ def _build_context(chunks):
             relations.append(f"{label}@{span}")
 
         body = "\n\n".join(
-            f"[{c.file_path}:{c.start_line}-{c.end_line} | {c.code_type}]\n{c.content}"
+            f"[{c.file_path}:{c.start_line}-{c.end_line} | {c.code_type}]\n{_clip(c.content, MAX_CONTEXT_CHARS_PER_CHUNK)}"
             for c in file_chunks
         )
         sections.append(
@@ -42,7 +54,7 @@ def reasoning_node(state: AgentState) -> AgentState:
         },
     )
 
-    response = chat(prompt)
+    response = chat(prompt, max_tokens=REASONING_MAX_TOKENS)
     state["explanation"] = response
 
     if state.get("session_id"):

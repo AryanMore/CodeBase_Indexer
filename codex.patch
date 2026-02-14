@@ -1,0 +1,1331 @@
+diff --git a/AI_Agent/graph/nodes/intent.py b/AI_Agent/graph/nodes/intent.py
+index acbfac9df9395956c6c5fa8842e6e96a42d1305e..81daddd352b277bc3545f21699e31dce27c85ff6 100644
+--- a/AI_Agent/graph/nodes/intent.py
++++ b/AI_Agent/graph/nodes/intent.py
+@@ -1,17 +1,54 @@
+ from AI_Agent.graph.state import AgentState
+ from AI_Agent.infra.llm import chat, render_prompt
++from AI_Agent.schemas.intent import Intent
++
++
++MODIFY_HINTS = {
++    "change",
++    "modify",
++    "edit",
++    "update",
++    "rewrite",
++    "implement",
++    "add",
++    "remove",
++    "refactor",
++    "fix",
++    "bug",
++    "optimize",
++}
++
++
++def _heuristic_intent(user_query: str):
++    text = user_query.lower().strip()
++    if not text:
++        return Intent.EXPLAIN
++
++    if any(hint in text for hint in MODIFY_HINTS):
++        if "refactor" in text:
++            return Intent.REFACTOR
++        if "bug" in text or "fix" in text:
++            return Intent.DEBUG
++        return Intent.MODIFY
++
++    # Most user queries are informational Q&A; shortcut to avoid an LLM call.
++    return Intent.EXPLAIN
+ 
+ 
+ def intent_node(state: AgentState) -> AgentState:
++    heuristic = _heuristic_intent(state["user_query"])
++    if heuristic in {Intent.EXPLAIN, Intent.MODIFY, Intent.REFACTOR, Intent.DEBUG}:
++        state["intent"] = heuristic
++        return state
++
+     prompt = render_prompt(
+         "AI_Agent/prompts/intent.txt",
+         {"user_query": state["user_query"]},
+     )
+     response = chat(prompt, max_tokens=20).strip()
+-    from AI_Agent.schemas.intent import Intent
+ 
+     try:
+         state["intent"] = Intent(response)
+     except Exception:
+         state["intent"] = Intent.EXPLAIN
+     return state
+diff --git a/AI_Agent/graph/nodes/planner.py b/AI_Agent/graph/nodes/planner.py
+index d5bfdf78b16bcb4fc52dae9a1a30602b57ef837c..a627ee3b61cd0aeac2fe5f798691c149d9eeb2c5 100644
+--- a/AI_Agent/graph/nodes/planner.py
++++ b/AI_Agent/graph/nodes/planner.py
+@@ -1,28 +1,41 @@
+ from AI_Agent.graph.state import AgentState
+ from AI_Agent.infra.llm import chat, extract_json, render_prompt
++from AI_Agent.schemas.intent import Intent
+ from AI_Agent.schemas.plan import Plan
+ 
+ 
+ def planner_node(state: AgentState) -> AgentState:
++    # Fast-path for common informational queries: avoid an extra LLM call
++    # while preserving context quality (retrieval + expansion still enabled).
++    if state["intent"] in {Intent.EXPLAIN, Intent.LOCATE, Intent.ANALYZE}:
++        state["plan"] = Plan(
++            intent=state["intent"].value,
++            steps=["Retrieve relevant chunks", "Answer with grounded context"],
++            requires_expansion=True,
++            requires_full_file=False,
++            target_files=None,
++        )
++        return state
++
+     prompt = render_prompt(
+         "AI_Agent/prompts/planner.txt",
+         {
+             "intent": state["intent"].value,
+             "user_query": state["user_query"],
+         },
+     )
+     response = chat(prompt)
+ 
+     try:
+         plan_data = extract_json(response)
+         state["plan"] = Plan(**plan_data)
+     except Exception:
+         state["plan"] = Plan(
+             intent=state["intent"].value,
+             steps=["Retrieve relevant chunks", "Answer with grounded context"],
+             requires_expansion=True,
+             requires_full_file=False,
+             target_files=None,
+         )
+ 
+     return state
+diff --git a/AI_Agent/graph/nodes/reasoning.py b/AI_Agent/graph/nodes/reasoning.py
+index e4132f4970373220cd5f0da2e2dd68f240732884..1af30b116f3affadbcfa6604a8c1a6db68f24c6b 100644
+--- a/AI_Agent/graph/nodes/reasoning.py
++++ b/AI_Agent/graph/nodes/reasoning.py
+@@ -1,51 +1,63 @@
++import os
+ from collections import defaultdict
+ 
+ from AI_Agent.graph.state import AgentState
+ from AI_Agent.infra.llm import chat, render_prompt
+ from AI_Agent.memory.store import memory
+ 
++MAX_CONTEXT_CHARS_PER_CHUNK = int(os.getenv("MAX_CONTEXT_CHARS_PER_CHUNK", "1200"))
++REASONING_MAX_TOKENS = int(os.getenv("REASONING_MAX_TOKENS", "180"))
++
++
++def _clip(text: str, max_chars: int) -> str:
++    if max_chars <= 0:
++        return text
++    if len(text) <= max_chars:
++        return text
++    return text[:max_chars] + "\n... [truncated for latency]"
++
+ 
+ def _build_context(chunks):
+     grouped = defaultdict(list)
+     for c in chunks:
+         grouped[c.file_path].append(c)
+ 
+     sections = []
+     for file_path, file_chunks in grouped.items():
+         file_chunks.sort(key=lambda x: ((x.start_line or 0), (x.end_line or 0)))
+         relations = []
+         for c in file_chunks:
+             label = c.code_type or "unknown"
+             span = f"{c.start_line or '?'}-{c.end_line or '?'}"
+             relations.append(f"{label}@{span}")
+ 
+         body = "\n\n".join(
+-            f"[{c.file_path}:{c.start_line}-{c.end_line} | {c.code_type}]\n{c.content}"
++            f"[{c.file_path}:{c.start_line}-{c.end_line} | {c.code_type}]\n{_clip(c.content, MAX_CONTEXT_CHARS_PER_CHUNK)}"
+             for c in file_chunks
+         )
+         sections.append(
+             f"FILE: {file_path}\nRELATED CHUNKS: {', '.join(relations)}\n{body}"
+         )
+ 
+     return "\n\n".join(sections)
+ 
+ 
+ def reasoning_node(state: AgentState) -> AgentState:
+     approved_chunks = state["retrieved_chunks"] + state["expanded_chunks"] + state["file_chunks"]
+     context = _build_context(approved_chunks)
+ 
+     prompt = render_prompt(
+         "AI_Agent/prompts/reasoning.txt",
+         {
+             "context": context,
+             "user_query": state["user_query"],
+         },
+     )
+ 
+-    response = chat(prompt)
++    response = chat(prompt, max_tokens=REASONING_MAX_TOKENS)
+     state["explanation"] = response
+ 
+     if state.get("session_id"):
+         memory.add_turn(state["session_id"], state["user_query"], response)
+ 
+     return state
+diff --git a/AI_Agent/infra/llm.py b/AI_Agent/infra/llm.py
+index 19fdfeb33e6ef888e827678979f932dcd6f45180..ddeb3dc8278cb0ed6fe6b4b3a0259cccc700e25e 100644
+--- a/AI_Agent/infra/llm.py
++++ b/AI_Agent/infra/llm.py
+@@ -1,34 +1,108 @@
+ import json
++import os
+ import re
+ from pathlib import Path
+ 
+ import ollama
+ 
+-MODEL = "llama3.2:3b"
++MODEL = os.getenv("LLM_MODEL", "llama3.2:3b")
++USE_GROQ = os.getenv("USE_GROQ", "false").lower() == "true"
++GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
++
++_GROQ_CLIENTS = None
++_GROQ_START_INDEX = 0
+ 
+ 
+ def render_prompt(template_path: str, values: dict[str, str]) -> str:
+     template = Path(template_path).read_text(encoding="utf-8")
+     prompt = template
+     for key, value in values.items():
+         prompt = prompt.replace(f"{{{{{key}}}}}", value)
+     return prompt
+ 
+ 
++def _load_groq_clients():
++    global _GROQ_CLIENTS
++
++    if _GROQ_CLIENTS is not None:
++        return _GROQ_CLIENTS
++
++    keys = [
++        os.getenv("GROQ_API_KEY"),
++        os.getenv("GROQ_API_KEY_1"),
++        os.getenv("GROQ_API_KEY_2"),
++        os.getenv("GROQ_API_KEY_PRIMARY"),
++        os.getenv("GROQ_API_KEY_SECONDARY"),
++    ]
++
++    seen = set()
++    deduped = []
++    for key in keys:
++        if key and key not in seen:
++            deduped.append(key)
++            seen.add(key)
++
++    if not deduped:
++        raise RuntimeError("No Groq API key configured. Set GROQ_API_KEY (or _1/_2).")
++
++    from groq import Groq
++
++    _GROQ_CLIENTS = [Groq(api_key=key) for key in deduped]
++    return _GROQ_CLIENTS
++
++
++def _is_rate_limited_error(exc: Exception) -> bool:
++    status_code = getattr(exc, "status_code", None)
++    if status_code == 429:
++        return True
++
++    msg = str(exc).lower()
++    return "rate" in msg and "limit" in msg or "too many requests" in msg or "rpm" in msg
++
++
++def _chat_with_groq_failover(prompt: str, max_tokens: int) -> str:
++    global _GROQ_START_INDEX
++
++    clients = _load_groq_clients()
++    errors = []
++
++    for attempt in range(len(clients)):
++        idx = (_GROQ_START_INDEX + attempt) % len(clients)
++        client = clients[idx]
++        try:
++            response = client.chat.completions.create(
++                model=GROQ_MODEL,
++                messages=[{"role": "user", "content": prompt}],
++                max_tokens=max_tokens,
++            )
++            _GROQ_START_INDEX = (idx + 1) % len(clients)
++            return response.choices[0].message.content
++        except Exception as exc:
++            errors.append(exc)
++            if _is_rate_limited_error(exc):
++                continue
++            raise
++
++    raise RuntimeError(f"All Groq keys exhausted/failed: {[str(e) for e in errors]}")
++
++
+ def chat(prompt: str, max_tokens: int = 300) -> str:
++    if USE_GROQ:
++        return _chat_with_groq_failover(prompt=prompt, max_tokens=max_tokens)
++
+     response = ollama.chat(
+         model=MODEL,
+         messages=[{"role": "user", "content": prompt}],
+         options={"temperature": 0, "num_predict": max_tokens},
+     )
+     return response["message"]["content"]
+ 
+ 
+ def extract_json(text: str) -> dict:
+     try:
+         return json.loads(text)
+     except json.JSONDecodeError:
+         match = re.search(r"\{[\s\S]*\}", text)
+         if not match:
+             raise
+         return json.loads(match.group(0))
+diff --git a/AI_Agent/tools/rag.py b/AI_Agent/tools/rag.py
+index 193104a053328548c17432447a935059e9af5e7d..bb0bed0ab4d3e4924e154fcc5021961f0abecd97 100644
+--- a/AI_Agent/tools/rag.py
++++ b/AI_Agent/tools/rag.py
+@@ -1,40 +1,62 @@
+ import os
+ 
+ import requests
+ 
+ from AI_Agent.schemas.chunk import Chunk
+ 
+ 
+ class RAGClient:
+     BASE_URL = os.getenv("RAG_BASE_URL", "http://localhost:8000")
++    USE_INTERNAL_RAG = os.getenv("USE_INTERNAL_RAG", "true").lower() == "true"
++
++    def _can_use_internal(self) -> bool:
++        return self.USE_INTERNAL_RAG and self.BASE_URL in {"http://localhost:8000", "http://127.0.0.1:8000"}
+ 
+     def retrieve_chunks(self, query: str, top_k: int, repo_url: str):
++        if self._can_use_internal():
++            from backend.tasks.query.rag.agent_rag import retrieve_chunks_for_agent
++
++            chunks = retrieve_chunks_for_agent(query=query, top_k=top_k, repo_url=repo_url)
++            return [Chunk(**c) for c in chunks]
++
+         response = requests.post(
+             f"{self.BASE_URL}/rag/retrieve",
+             json={"repo_url": repo_url, "query": query, "top_k": top_k},
+             timeout=60,
+         )
+         response.raise_for_status()
+         return [Chunk(**c) for c in response.json()["chunks"]]
+ 
+     def expand_context(
+         self,
+         repo_url: str,
+         source_chunk_ids: list[str],
+         requested_code_types: list[str],
+         scope: str,
+         max_chunks: int,
+     ):
++        if self._can_use_internal():
++            from backend.tasks.query.rag.agent_rag import expand_context_for_agent
++
++            chunks = expand_context_for_agent(
++                repo_url=repo_url,
++                source_chunk_ids=source_chunk_ids,
++                requested_code_types=requested_code_types,
++                scope=scope,
++                max_chunks=max_chunks,
++            )
++            return [Chunk(**c) for c in chunks]
++
+         response = requests.post(
+             f"{self.BASE_URL}/rag/expand",
+             json={
+                 "repo_url": repo_url,
+                 "source_chunk_ids": source_chunk_ids,
+                 "requested_code_types": requested_code_types,
+                 "scope": scope,
+                 "max_chunks": max_chunks,
+             },
+             timeout=60,
+         )
+         response.raise_for_status()
+         return [Chunk(**c) for c in response.json()["chunks"]]
+diff --git a/WORKABILITY_REPORT.md b/WORKABILITY_REPORT.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..fcc87d983cef7897315b17f82e08398a661c96ae
+--- /dev/null
++++ b/WORKABILITY_REPORT.md
+@@ -0,0 +1,31 @@
++# Workability Report
++
++## Verdict
++**Yes — after basic setup of Qdrant and Ollama, the core app flow should work.**
++
++What was failing in this environment was not an internal logic crash, but missing runtime services.
++
++## Evidence
++
++### Backend
++- `pytest -q` result: 4 tests passed, 2 failed.
++- Failing tests:
++  - `tests/test_ingest.py::test_ingest_repo` failed with Qdrant connection refusal (`localhost:6333`).
++  - `tests/test_query.py::test_query_repo` failed with Ollama connection error.
++- Why this happens:
++  - Backend Qdrant client defaults to `QDRANT_HOST=localhost` and `QDRANT_PORT=6333`.
++  - Embeddings and chat use Ollama directly.
++
++### Frontend
++- `npm run build` failed initially because dependencies were not installed (`react-scripts: not found`).
++- `npm ci` failed because lockfile mismatch (`Missing: yaml@2.8.2 from lock file`), which affects deterministic CI installs.
++- In practice, for local usage this is usually resolved by `npm install` (which updates lockfile), then build/run.
++
++## What must be true for it to work
++1. Qdrant is running (for example via Docker on port 6333).
++2. Ollama is installed and running locally.
++3. Frontend dependencies are installed; ideally lockfile is synced and committed for reproducible installs.
++
++## Bottom line
++- **Backend:** expected to work once Qdrant + Ollama are up.
++- **Frontend:** expected to work after installing dependencies; but lockfile sync should be fixed for clean `npm ci` workflows.
+diff --git a/backend/infra/db.py b/backend/infra/db.py
+index 76ff73b4d20773bee334d0d492fc92161be07426..ef4460b0eac7992b97d586fea35ac7872eae816c 100644
+--- a/backend/infra/db.py
++++ b/backend/infra/db.py
+@@ -1,60 +1,83 @@
+ import os
+ from dotenv import load_dotenv
+ from qdrant_client import QdrantClient
+-from qdrant_client.models import VectorParams, Distance
++from qdrant_client.models import Distance, PayloadSchemaType, VectorParams
+ 
+ load_dotenv()
+ 
+ _client = None
+ 
++
+ def get_qdrant_client():
+     global _client
+ 
+     if _client is None:
+         host = os.getenv("QDRANT_HOST", "localhost")
+         port = int(os.getenv("QDRANT_PORT", 6333))
+         _client = QdrantClient(host=host, port=port)
+ 
+     return _client
+ 
+ 
+ def get_collection_name():
+     return os.getenv("QDRANT_COLLECTION_NAME", "code_embeddings")
+ 
+ 
++def _ensure_payload_indexes(client: QdrantClient, collection_name: str):
++    # Filter-heavy query paths (/rag/retrieve and /rag/expand) rely on these fields.
++    # Keeping payload indexes in place avoids expensive full scans.
++    indexed_fields = {
++        "repo_url": PayloadSchemaType.KEYWORD,
++        "file_path": PayloadSchemaType.KEYWORD,
++        "chunk_type": PayloadSchemaType.KEYWORD,
++    }
++
++    for field_name, schema in indexed_fields.items():
++        try:
++            client.create_payload_index(
++                collection_name=collection_name,
++                field_name=field_name,
++                field_schema=schema,
++                wait=True,
++            )
++        except Exception:
++            # Index may already exist, or backend may return a non-fatal conflict.
++            # Query path remains functional either way.
++            pass
++
++
+ def create_collection(vector_size: int):
+     client = get_qdrant_client()
+     collection_name = get_collection_name()
+ 
+     collections = [c.name for c in client.get_collections().collections]
+ 
+     if collection_name not in collections:
+         client.create_collection(
+             collection_name=collection_name,
+-            vectors_config=VectorParams(
+-                size=vector_size,
+-                distance=Distance.COSINE
+-            )
++            vectors_config=VectorParams(size=vector_size, distance=Distance.COSINE),
+         )
+ 
++    _ensure_payload_indexes(client, collection_name)
++
+ 
+ def clear_collection():
+     client = get_qdrant_client()
+     collection_name = get_collection_name()
+ 
+     client.delete_collection(collection_name=collection_name)
+ 
+ 
+ class _QdrantCollectionAdapter:
+     def __init__(self, client, collection_name):
+         self.client = client
+         self.collection_name = collection_name
+ 
+     def count_documents(self, _filter=None):
+         result = self.client.count(collection_name=self.collection_name, exact=True)
+         return result.count
+ 
+ 
+ def get_collection():
+     """Backward-compatible adapter for legacy tests expecting a Mongo-style collection."""
+     return _QdrantCollectionAdapter(get_qdrant_client(), get_collection_name())
+diff --git a/backend/infra/llm.py b/backend/infra/llm.py
+index b523243db7de32a4aae11a89fb38ac0dae65fc3c..d7fb21185749655c26c974ad69c14b3d52c32ff3 100644
+--- a/backend/infra/llm.py
++++ b/backend/infra/llm.py
+@@ -1,56 +1,95 @@
+ import os
++
+ import ollama
+ from dotenv import load_dotenv
+-from backend.config import (
+-    EMBEDDING_MODEL,
+-    USE_GROQ,
+-    GROQ_MODEL,
+-    LLM_MODEL
+-)
++
++from backend.config import EMBEDDING_MODEL, GROQ_MODEL, LLM_MODEL, USE_GROQ
+ 
+ load_dotenv()
+ 
+-_groq = None
++_GROQ_CLIENTS = None
++_GROQ_START_INDEX = 0
+ 
+ 
+ def embed_text(text: str) -> list:
+     response = ollama.embeddings(
+         model=EMBEDDING_MODEL,
+-        prompt=text
++        prompt=text,
+     )
+     return response["embedding"]
+ 
+ 
+-def get_groq_client():
+-    global _groq
+-    if _groq is None:
+-        api_key = os.getenv("GROQ_API_KEY")
+-        if not api_key:
+-            raise RuntimeError("GROQ_API_KEY not set in environment")
+-        from groq import Groq
+-        _groq = Groq(api_key=api_key)
+-    return _groq
++def _load_groq_clients():
++    global _GROQ_CLIENTS
++
++    if _GROQ_CLIENTS is not None:
++        return _GROQ_CLIENTS
++
++    keys = [
++        os.getenv("GROQ_API_KEY"),
++        os.getenv("GROQ_API_KEY_1"),
++        os.getenv("GROQ_API_KEY_2"),
++        os.getenv("GROQ_API_KEY_PRIMARY"),
++        os.getenv("GROQ_API_KEY_SECONDARY"),
++    ]
++    seen = set()
++    deduped = []
++    for key in keys:
++        if key and key not in seen:
++            deduped.append(key)
++            seen.add(key)
++
++    if not deduped:
++        raise RuntimeError("No Groq API key configured. Set GROQ_API_KEY (or _1/_2).")
++
++    from groq import Groq
++
++    _GROQ_CLIENTS = [Groq(api_key=key) for key in deduped]
++    return _GROQ_CLIENTS
++
++
++def _is_rate_limited_error(exc: Exception) -> bool:
++    status_code = getattr(exc, "status_code", None)
++    if status_code == 429:
++        return True
++
++    msg = str(exc).lower()
++    return "rate" in msg and "limit" in msg or "too many requests" in msg or "rpm" in msg
++
++
++def _chat_with_groq_failover(prompt: str, max_tokens: int) -> str:
++    global _GROQ_START_INDEX
++
++    clients = _load_groq_clients()
++    errors = []
++
++    for attempt in range(len(clients)):
++        idx = (_GROQ_START_INDEX + attempt) % len(clients)
++        client = clients[idx]
++        try:
++            response = client.chat.completions.create(
++                model=GROQ_MODEL,
++                messages=[{"role": "user", "content": prompt}],
++                max_tokens=max_tokens,
++            )
++            _GROQ_START_INDEX = (idx + 1) % len(clients)
++            return response.choices[0].message.content
++        except Exception as exc:
++            errors.append(exc)
++            if _is_rate_limited_error(exc):
++                continue
++            raise
++
++    raise RuntimeError(f"All Groq keys exhausted/failed: {[str(e) for e in errors]}")
+ 
+ 
+-def chat(prompt: str) -> str:
++def chat(prompt: str, max_tokens: int = 200) -> str:
+     if USE_GROQ:
+-        groq_client = get_groq_client()
+-        response = groq_client.chat.completions.create(
+-            model=GROQ_MODEL,
+-            messages=[
+-                {"role": "user", "content": prompt}
+-            ],
+-            max_tokens=200
+-        )
+-        return response.choices[0].message.content
++        return _chat_with_groq_failover(prompt=prompt, max_tokens=max_tokens)
+ 
+     response = ollama.chat(
+         model=LLM_MODEL,
+-        messages=[
+-            {"role": "user", "content": prompt}
+-        ],
+-        options={
+-            "num_predict": 200
+-        }
++        messages=[{"role": "user", "content": prompt}],
++        options={"num_predict": max_tokens},
+     )
+     return response["message"]["content"]
+diff --git a/backend/tasks/query/rag/agent_rag.py b/backend/tasks/query/rag/agent_rag.py
+index cfbabc5a36c420255592004fd4f044d67f758844..ddd428d6a961d964735f670bf05f35d43213305a 100644
+--- a/backend/tasks/query/rag/agent_rag.py
++++ b/backend/tasks/query/rag/agent_rag.py
+@@ -1,201 +1,287 @@
+ from __future__ import annotations
+ 
++import heapq
++import os
+ from dataclasses import dataclass
+ from typing import Any, Dict, Iterable, List, Optional, Set
+ 
+ from qdrant_client.models import FieldCondition, Filter, MatchAny, MatchValue
+ 
+ from backend.infra.db import get_collection_name, get_qdrant_client
+ from backend.infra.llm import embed_text
+ 
+ 
+ CHUNK_TYPE_TO_CODE_TYPE = {
+     "python_import": "py:imports",
+     "python_class_header": "py:class_header",
+     "python_class_function": "py:function",
+     "python_function": "py:function",
+     "python_docstring": "py:docstring",
+     "python_top_level_code": "py:top_level",
+     "javascript_import": "js:imports",
+     "javascript_class_header": "js:class_header",
+     "javascript_class_function": "js:function",
+     "javascript_function": "js:function",
+     "javascript_top_level_code": "js:top_level",
+     "html_main": "html:main",
+     "html_section": "html:section",
+     "html_article": "html:article",
+     "html_nav": "html:nav",
+     "html_form": "html:form",
+     "html_header": "html:header",
+     "html_footer": "html:footer",
+     "html_top_level_markup": "html:top_level",
+     "blind_chunk": "text:chunk",
+ }
+ 
+ CODE_TYPE_TO_CHUNK_TYPES = {
+     "py:imports": {"python_import"},
+     "py:class_header": {"python_class_header"},
+     "py:function": {"python_function", "python_class_function"},
+     "py:docstring": {"python_docstring"},
+     "js:imports": {"javascript_import"},
+     "js:class_header": {"javascript_class_header"},
+     "js:function": {"javascript_function", "javascript_class_function"},
+     "html:section": {"html_section"},
+     "html:article": {"html_article"},
+     "html:main": {"html_main"},
+ }
+ 
++CANDIDATE_META_FIELDS = ["file_path", "chunk_type", "identifier", "uses", "class_name", "chunk_number"]
++SCROLL_LIMIT = 256
++MAX_EXPAND_SCAN_POINTS = int(os.getenv("MAX_EXPAND_SCAN_POINTS", "1200"))
++RANKING_POOL_MULTIPLIER = 8
++MIN_RANKING_POOL = 24
++
+ 
+ @dataclass
+-class Candidate:
+-    point: Any
+-    score: float
++class SourceMeta:
++    file_paths: Set[str]
++    entries: List[Dict[str, Any]]
+ 
+ 
+ def _repo_filter(repo_url: Optional[str]) -> Optional[Filter]:
+     if not repo_url:
+         return None
+     return Filter(must=[FieldCondition(key="repo_url", match=MatchValue(value=repo_url))])
+ 
+ 
+ def _normalize_chunk(point: Any) -> Dict[str, Any]:
+     payload = point.payload or {}
+     content = payload.get("content", "")
+     start_line = 1 if content else None
+     end_line = len(content.splitlines()) if content else None
+ 
+     symbols = []
+     for key in ("identifier", "class_name"):
+         if payload.get(key):
+             symbols.append(payload[key])
+ 
+     return {
+         "chunk_id": str(point.id),
+         "file_path": payload.get("file_path", ""),
+         "content": content,
+         "code_type": CHUNK_TYPE_TO_CODE_TYPE.get(payload.get("chunk_type")),
+         "start_line": start_line,
+         "end_line": end_line,
+         "symbols": symbols or None,
+     }
+ 
+ 
+ def retrieve_chunks_for_agent(query: str, top_k: int, repo_url: Optional[str]) -> List[Dict[str, Any]]:
+     client = get_qdrant_client()
+     result = client.query_points(
+         collection_name=get_collection_name(),
+         query=embed_text(query),
+         limit=top_k,
+         query_filter=_repo_filter(repo_url),
+     )
+     return [_normalize_chunk(point) for point in result.points]
+ 
+ 
+-def _fetch_points_for_same_files(file_paths: Set[str], repo_url: Optional[str]) -> List[Any]:
++def _build_same_file_filter(
++    file_paths: Set[str],
++    repo_url: Optional[str],
++    allowed_chunk_types: Optional[Set[str]] = None,
++) -> Optional[Filter]:
+     if not file_paths:
+-        return []
++        return None
+ 
+     must = [FieldCondition(key="file_path", match=MatchAny(any=list(file_paths)))]
+     if repo_url:
+         must.append(FieldCondition(key="repo_url", match=MatchValue(value=repo_url)))
++    if allowed_chunk_types:
++        must.append(FieldCondition(key="chunk_type", match=MatchAny(any=list(allowed_chunk_types))))
++
++    return Filter(must=must)
++
++
++def _fetch_points_for_same_files(
++    file_paths: Set[str],
++    repo_url: Optional[str],
++    allowed_chunk_types: Optional[Set[str]] = None,
++    payload_fields: Optional[List[str]] = None,
++    max_points: Optional[int] = None,
++) -> List[Any]:
++    scroll_filter = _build_same_file_filter(file_paths, repo_url, allowed_chunk_types)
++    if scroll_filter is None:
++        return []
+ 
+     client = get_qdrant_client()
+     all_points: List[Any] = []
+     offset = None
++    with_payload = payload_fields if payload_fields else True
++
+     while True:
+         points, offset = client.scroll(
+             collection_name=get_collection_name(),
+-            scroll_filter=Filter(must=must),
+-            with_payload=True,
++            scroll_filter=scroll_filter,
++            with_payload=with_payload,
+             with_vectors=False,
+-            limit=256,
++            limit=SCROLL_LIMIT,
+             offset=offset,
+         )
+         all_points.extend(points)
++        if max_points is not None and len(all_points) >= max_points:
++            return all_points[:max_points]
+         if offset is None:
+             break
+ 
+     return all_points
+ 
+ 
+-def _relation_score(source_points: Iterable[Any], candidate: Any) -> float:
++def _prepare_source_meta(source_points: Iterable[Any]) -> SourceMeta:
++    entries: List[Dict[str, Any]] = []
++    file_paths: Set[str] = set()
++
++    for sp in source_points:
++        payload = sp.payload or {}
++        file_path = payload.get("file_path")
++        if file_path:
++            file_paths.add(file_path)
++
++        entries.append(
++            {
++                "identifier": payload.get("identifier"),
++                "uses": set(payload.get("uses", []) or []),
++                "class_name": payload.get("class_name"),
++                "chunk_number": payload.get("chunk_number"),
++            }
++        )
++
++    return SourceMeta(file_paths=file_paths, entries=entries)
++
++
++def _relation_score(source_meta: SourceMeta, candidate_payload: Dict[str, Any]) -> float:
+     score = 0.0
+-    cp = candidate.payload or {}
+ 
+-    source_by_file = {((p.payload or {}).get("file_path")) for p in source_points}
+-    if cp.get("file_path") in source_by_file:
++    if candidate_payload.get("file_path") in source_meta.file_paths:
+         score += 2.0
+ 
+-    c_identifier = cp.get("identifier")
+-    c_uses = set(cp.get("uses", []) or [])
+-    c_class = cp.get("class_name")
+-    c_chunk_no = cp.get("chunk_number")
+-
+-    for sp in source_points:
+-        sp_payload = sp.payload or {}
+-        s_uses = set(sp_payload.get("uses", []) or [])
++    c_identifier = candidate_payload.get("identifier")
++    c_uses = set(candidate_payload.get("uses", []) or [])
++    c_class = candidate_payload.get("class_name")
++    c_chunk_no = candidate_payload.get("chunk_number")
+ 
+-        if c_identifier and c_identifier in s_uses:
++    for src in source_meta.entries:
++        if c_identifier and c_identifier in src["uses"]:
+             score += 3.0
+ 
+-        s_identifier = sp_payload.get("identifier")
++        s_identifier = src["identifier"]
+         if s_identifier and s_identifier in c_uses:
+             score += 2.0
+ 
+-        if c_class and c_class == sp_payload.get("class_name"):
++        if c_class and c_class == src["class_name"]:
+             score += 1.5
+ 
+-        s_chunk_no = sp_payload.get("chunk_number")
++        s_chunk_no = src["chunk_number"]
+         if isinstance(c_chunk_no, int) and isinstance(s_chunk_no, int):
+             dist = abs(c_chunk_no - s_chunk_no)
+             if dist <= 2:
+                 score += (2 - min(dist, 2)) * 0.5
+ 
+     return score
+ 
+ 
++def _top_candidate_ids(
++    candidates: Iterable[Any],
++    source_meta: SourceMeta,
++    source_ids: Set[str],
++    max_chunks: int,
++) -> List[str]:
++    pool_size = max(MIN_RANKING_POOL, max_chunks * RANKING_POOL_MULTIPLIER)
++    heap: List[tuple[float, str]] = []
++
++    for point in candidates:
++        pid = str(point.id)
++        if pid in source_ids:
++            continue
++
++        score = _relation_score(source_meta, point.payload or {})
++        if score <= 0:
++            continue
++
++        entry = (score, pid)
++        if len(heap) < pool_size:
++            heapq.heappush(heap, entry)
++        elif entry > heap[0]:
++            heapq.heapreplace(heap, entry)
++
++    heap.sort(reverse=True)
++    return [pid for _, pid in heap[:max_chunks]]
++
++
+ def expand_context_for_agent(
+     repo_url: Optional[str],
+     source_chunk_ids: List[str],
+     requested_code_types: List[str],
+     scope: str,
+     max_chunks: int,
+ ) -> List[Dict[str, Any]]:
+     client = get_qdrant_client()
+     source_points = client.retrieve(
+         collection_name=get_collection_name(),
+         ids=source_chunk_ids,
+-        with_payload=True,
++        with_payload=CANDIDATE_META_FIELDS,
+         with_vectors=False,
+     )
+     if not source_points:
+         return []
+ 
+-    file_paths = {((p.payload or {}).get("file_path")) for p in source_points if (p.payload or {}).get("file_path")}
+-    if scope == "same_file":
+-        candidates = _fetch_points_for_same_files(file_paths, repo_url)
+-    else:
+-        candidates = _fetch_points_for_same_files(file_paths, repo_url)
+-
+     allowed_chunk_types: Set[str] = set()
+     for code_type in requested_code_types:
+         allowed_chunk_types.update(CODE_TYPE_TO_CHUNK_TYPES.get(code_type, set()))
+ 
+-    source_ids = {str(p.id) for p in source_points}
+-    scored: List[Candidate] = []
+-    for point in candidates:
+-        pid = str(point.id)
+-        if pid in source_ids:
+-            continue
++    source_meta = _prepare_source_meta(source_points)
++    if scope == "same_file":
++        candidates = _fetch_points_for_same_files(
++            source_meta.file_paths,
++            repo_url,
++            allowed_chunk_types,
++            payload_fields=CANDIDATE_META_FIELDS,
++            max_points=MAX_EXPAND_SCAN_POINTS,
++        )
++    else:
++        candidates = _fetch_points_for_same_files(
++            source_meta.file_paths,
++            repo_url,
++            allowed_chunk_types,
++            payload_fields=CANDIDATE_META_FIELDS,
++            max_points=MAX_EXPAND_SCAN_POINTS,
++        )
+ 
+-        p_payload = point.payload or {}
+-        if allowed_chunk_types and p_payload.get("chunk_type") not in allowed_chunk_types:
+-            continue
++    source_ids = {str(p.id) for p in source_points}
++    top_ids = _top_candidate_ids(candidates, source_meta, source_ids, max_chunks)
++    if not top_ids:
++        return []
+ 
+-        score = _relation_score(source_points, point)
+-        if score <= 0:
+-            continue
+-        scored.append(Candidate(point=point, score=score))
++    top_points = client.retrieve(
++        collection_name=get_collection_name(),
++        ids=top_ids,
++        with_payload=True,
++        with_vectors=False,
++    )
++    by_id = {str(point.id): point for point in top_points}
++    ordered = [by_id[pid] for pid in top_ids if pid in by_id]
+ 
+-    scored.sort(key=lambda c: c.score, reverse=True)
+-    return [_normalize_chunk(c.point) for c in scored[:max_chunks]]
++    return [_normalize_chunk(point) for point in ordered]
+diff --git a/tests/test_agent_rag.py b/tests/test_agent_rag.py
+index 6878932121ebccff7267278049ff6e800494e3f1..69bb1f101ee03dd9d9aa42f318c107c59d6a2515 100644
+--- a/tests/test_agent_rag.py
++++ b/tests/test_agent_rag.py
+@@ -1,62 +1,103 @@
+ from types import SimpleNamespace
+ 
+-from backend.tasks.query.rag.agent_rag import _normalize_chunk, _relation_score
++from backend.tasks.query.rag.agent_rag import (
++    _build_same_file_filter,
++    _normalize_chunk,
++    _prepare_source_meta,
++    _relation_score,
++    _top_candidate_ids,
++)
+ 
+ 
+ def point(pid, payload):
+     return SimpleNamespace(id=pid, payload=payload)
+ 
+ 
+ def test_normalize_chunk_maps_types_and_lines():
+     p = point(
+         "abc",
+         {
+             "file_path": "a.py",
+             "content": "def x():\n    return 1",
+             "chunk_type": "python_function",
+             "identifier": "x",
+         },
+     )
+ 
+     normalized = _normalize_chunk(p)
+     assert normalized["chunk_id"] == "abc"
+     assert normalized["code_type"] == "py:function"
+     assert normalized["start_line"] == 1
+     assert normalized["end_line"] == 2
+     assert "x" in normalized["symbols"]
+ 
+ 
+ def test_relation_score_prefers_dependency_links():
+-    source = [
++    source_points = [
+         point(
+             "s1",
+             {
+                 "file_path": "svc.py",
+                 "identifier": "handle",
+                 "uses": ["build_response"],
+                 "chunk_number": 5,
+             },
+         )
+     ]
++    source_meta = _prepare_source_meta(source_points)
+ 
+-    candidate = point(
+-        "c1",
+-        {
+-            "file_path": "svc.py",
+-            "identifier": "build_response",
+-            "uses": [],
+-            "chunk_number": 6,
+-        },
+-    )
++    candidate_payload = {
++        "file_path": "svc.py",
++        "identifier": "build_response",
++        "uses": [],
++        "chunk_number": 6,
++    }
+ 
+-    far_candidate = point(
+-        "c2",
+-        {
+-            "file_path": "other.py",
+-            "identifier": "noop",
+-            "uses": [],
+-            "chunk_number": 100,
+-        },
++    far_candidate_payload = {
++        "file_path": "other.py",
++        "identifier": "noop",
++        "uses": [],
++        "chunk_number": 100,
++    }
++
++    assert _relation_score(source_meta, candidate_payload) > _relation_score(source_meta, far_candidate_payload)
++
++
++def test_build_same_file_filter_applies_chunk_type_constraint():
++    filt = _build_same_file_filter(
++        file_paths={"svc.py"},
++        repo_url="https://github.com/example/repo",
++        allowed_chunk_types={"python_import", "python_class_header"},
+     )
+ 
+-    assert _relation_score(source, candidate) > _relation_score(source, far_candidate)
++    assert filt is not None
++    assert len(filt.must) == 3
++
++    keys = {cond.key for cond in filt.must}
++    assert keys == {"file_path", "repo_url", "chunk_type"}
++
++
++def test_top_candidate_ids_returns_best_ranked_subset():
++    source_points = [
++        point(
++            "s1",
++            {
++                "file_path": "svc.py",
++                "identifier": "handle",
++                "uses": ["build_response"],
++                "chunk_number": 5,
++            },
++        )
++    ]
++    source_meta = _prepare_source_meta(source_points)
++
++    candidates = [
++        point("c1", {"file_path": "svc.py", "identifier": "build_response", "uses": [], "chunk_number": 6}),
++        point("c2", {"file_path": "svc.py", "identifier": "noop", "uses": [], "chunk_number": 7}),
++        point("c3", {"file_path": "other.py", "identifier": "noop", "uses": [], "chunk_number": 100}),
++    ]
++
++    top = _top_candidate_ids(candidates, source_meta, source_ids={"s1"}, max_chunks=2)
++
++    assert top[0] == "c1"
++    assert len(top) <= 2
+diff --git a/tests/test_agent_speed_paths.py b/tests/test_agent_speed_paths.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..3c0ef54cf66b6b9b49381032e2046991bd880a76
+--- /dev/null
++++ b/tests/test_agent_speed_paths.py
+@@ -0,0 +1,47 @@
++from AI_Agent.graph.nodes.intent import intent_node
++from AI_Agent.graph.nodes.planner import planner_node
++from AI_Agent.schemas.intent import Intent
++
++
++def _state(query: str):
++    return {
++        "user_query": query,
++        "repo_url": "https://github.com/example/repo",
++        "session_id": "s1",
++        "chat_history": [],
++        "intent": None,
++        "plan": None,
++        "retrieved_chunks": [],
++        "expanded_chunks": [],
++        "file_chunks": [],
++        "explanation": None,
++        "proposed_diff_id": None,
++        "approved": False,
++    }
++
++
++def test_intent_node_uses_heuristic_for_explain_without_llm(monkeypatch):
++    state = _state("What does this repository do?")
++
++    def fail_chat(*args, **kwargs):
++        raise AssertionError("chat should not be called for explain fast-path")
++
++    monkeypatch.setattr("AI_Agent.graph.nodes.intent.chat", fail_chat)
++
++    result = intent_node(state)
++    assert result["intent"] == Intent.EXPLAIN
++
++
++def test_planner_node_uses_static_plan_for_explain_without_llm(monkeypatch):
++    state = _state("Explain the API flow")
++    state["intent"] = Intent.EXPLAIN
++
++    def fail_chat(*args, **kwargs):
++        raise AssertionError("chat should not be called for explain planner fast-path")
++
++    monkeypatch.setattr("AI_Agent.graph.nodes.planner.chat", fail_chat)
++
++    result = planner_node(state)
++    assert result["plan"].intent == Intent.EXPLAIN.value
++    assert result["plan"].requires_expansion is True
++    assert result["plan"].requires_full_file is False
+diff --git a/tests/test_db_indexes.py b/tests/test_db_indexes.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..d7188a4a379006deea32455eba5d7eaba4160223
+--- /dev/null
++++ b/tests/test_db_indexes.py
+@@ -0,0 +1,29 @@
++from types import SimpleNamespace
++
++import backend.infra.db as db
++
++
++class FakeClient:
++    def __init__(self):
++        self.created = []
++        self.collections = [SimpleNamespace(name="code_embeddings")]
++
++    def get_collections(self):
++        return SimpleNamespace(collections=self.collections)
++
++    def create_collection(self, **kwargs):
++        self.collections.append(SimpleNamespace(name=kwargs["collection_name"]))
++
++    def create_payload_index(self, **kwargs):
++        self.created.append((kwargs["field_name"], kwargs["field_schema"]))
++
++
++def test_create_collection_ensures_payload_indexes(monkeypatch):
++    fake = FakeClient()
++    monkeypatch.setattr(db, "get_qdrant_client", lambda: fake)
++    monkeypatch.setattr(db, "get_collection_name", lambda: "code_embeddings")
++
++    db.create_collection(768)
++
++    fields = {name for name, _ in fake.created}
++    assert fields == {"repo_url", "file_path", "chunk_type"}
+diff --git a/tests/test_groq_failover.py b/tests/test_groq_failover.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..706d15fb721bb7129b789eb7a3fd5286baadd3ad
+--- /dev/null
++++ b/tests/test_groq_failover.py
+@@ -0,0 +1,50 @@
++from types import SimpleNamespace
++
++import AI_Agent.infra.llm as agent_llm
++import backend.infra.llm as backend_llm
++
++
++class RateLimitError(Exception):
++    def __init__(self, message="rate limit"):
++        super().__init__(message)
++        self.status_code = 429
++
++
++class FakeClient:
++    def __init__(self, outcomes):
++        self.outcomes = outcomes
++        self.call_idx = 0
++        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
++
++    def _create(self, **kwargs):
++        outcome = self.outcomes[self.call_idx]
++        self.call_idx += 1
++        if isinstance(outcome, Exception):
++            raise outcome
++        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=outcome))])
++
++
++def test_backend_groq_failover_to_second_key(monkeypatch):
++    monkeypatch.setattr(backend_llm, "USE_GROQ", True)
++    monkeypatch.setattr(backend_llm, "_GROQ_START_INDEX", 0)
++    monkeypatch.setattr(
++        backend_llm,
++        "_GROQ_CLIENTS",
++        [FakeClient([RateLimitError()]), FakeClient(["ok-from-second"])],
++    )
++
++    result = backend_llm.chat("hi", max_tokens=50)
++    assert result == "ok-from-second"
++
++
++def test_agent_groq_failover_to_second_key(monkeypatch):
++    monkeypatch.setattr(agent_llm, "USE_GROQ", True)
++    monkeypatch.setattr(agent_llm, "_GROQ_START_INDEX", 0)
++    monkeypatch.setattr(
++        agent_llm,
++        "_GROQ_CLIENTS",
++        [FakeClient([RateLimitError()]), FakeClient(["ok-agent-second"])],
++    )
++
++    result = agent_llm.chat("hi", max_tokens=50)
++    assert result == "ok-agent-second"
+diff --git a/tests/test_rag_client_internal.py b/tests/test_rag_client_internal.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..f512afa4cab0855b33b28d839f7a89ee74c63760
+--- /dev/null
++++ b/tests/test_rag_client_internal.py
+@@ -0,0 +1,57 @@
++from AI_Agent.tools.rag import RAGClient
++
++
++def test_retrieve_chunks_uses_internal_path(monkeypatch):
++    client = RAGClient()
++    client.BASE_URL = "http://localhost:8000"
++    client.USE_INTERNAL_RAG = True
++
++    monkeypatch.setattr(
++        "backend.tasks.query.rag.agent_rag.retrieve_chunks_for_agent",
++        lambda query, top_k, repo_url: [
++            {
++                "chunk_id": "1",
++                "file_path": "a.py",
++                "content": "def x(): pass",
++                "code_type": "py:function",
++                "start_line": 1,
++                "end_line": 1,
++                "symbols": ["x"],
++            }
++        ],
++    )
++
++    chunks = client.retrieve_chunks("what?", 5, "https://github.com/example/repo")
++    assert len(chunks) == 1
++    assert chunks[0].chunk_id == "1"
++
++
++def test_expand_context_uses_internal_path(monkeypatch):
++    client = RAGClient()
++    client.BASE_URL = "http://localhost:8000"
++    client.USE_INTERNAL_RAG = True
++
++    monkeypatch.setattr(
++        "backend.tasks.query.rag.agent_rag.expand_context_for_agent",
++        lambda repo_url, source_chunk_ids, requested_code_types, scope, max_chunks: [
++            {
++                "chunk_id": "2",
++                "file_path": "b.py",
++                "content": "import os",
++                "code_type": "py:imports",
++                "start_line": 1,
++                "end_line": 1,
++                "symbols": None,
++            }
++        ],
++    )
++
++    chunks = client.expand_context(
++        repo_url="https://github.com/example/repo",
++        source_chunk_ids=["1"],
++        requested_code_types=["py:imports"],
++        scope="same_file",
++        max_chunks=3,
++    )
++    assert len(chunks) == 1
++    assert chunks[0].chunk_id == "2"
+diff --git a/tests/test_reasoning_context.py b/tests/test_reasoning_context.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..4d3da1be0ca8c0509b238d0039509317fb4a4563
+--- /dev/null
++++ b/tests/test_reasoning_context.py
+@@ -0,0 +1,32 @@
++from types import SimpleNamespace
++
++from AI_Agent.graph.nodes import reasoning
++
++
++def chunk(content: str):
++    return SimpleNamespace(
++        file_path="a.py",
++        start_line=1,
++        end_line=3,
++        code_type="py:function",
++        content=content,
++    )
++
++
++def test_clip_truncates_large_chunk_text(monkeypatch):
++    monkeypatch.setattr(reasoning, "MAX_CONTEXT_CHARS_PER_CHUNK", 20)
++
++    text = "x" * 100
++    clipped = reasoning._clip(text, reasoning.MAX_CONTEXT_CHARS_PER_CHUNK)
++
++    assert len(clipped) > 20
++    assert clipped.endswith("[truncated for latency]")
++
++
++def test_build_context_uses_clipped_content(monkeypatch):
++    monkeypatch.setattr(reasoning, "MAX_CONTEXT_CHARS_PER_CHUNK", 10)
++
++    ctx = reasoning._build_context([chunk("abcdefghijklmnopqrstuvwxyz")])
++
++    assert "FILE: a.py" in ctx
++    assert "[truncated for latency]" in ctx
