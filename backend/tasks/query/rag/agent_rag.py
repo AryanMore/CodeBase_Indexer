@@ -59,6 +59,11 @@ class SourceMeta:
     file_paths: Set[str]
     entries: List[Dict[str, Any]]
 
+@dataclass
+class Candidate:
+    point: Any
+    score: float
+
 
 def _repo_filter(repo_url: Optional[str]) -> Optional[Filter]:
     if not repo_url:
@@ -106,6 +111,9 @@ def _build_same_file_filter(
 ) -> Optional[Filter]:
     if not file_paths:
         return None
+def _fetch_points_for_same_files(file_paths: Set[str], repo_url: Optional[str]) -> List[Any]:
+    if not file_paths:
+        return []
 
     must = [FieldCondition(key="file_path", match=MatchAny(any=list(file_paths)))]
     if repo_url:
@@ -243,10 +251,17 @@ def expand_context_for_agent(
         collection_name=get_collection_name(),
         ids=source_chunk_ids,
         with_payload=CANDIDATE_META_FIELDS,
+        with_payload=True,
         with_vectors=False,
     )
     if not source_points:
         return []
+
+    file_paths = {((p.payload or {}).get("file_path")) for p in source_points if (p.payload or {}).get("file_path")}
+    if scope == "same_file":
+        candidates = _fetch_points_for_same_files(file_paths, repo_url)
+    else:
+        candidates = _fetch_points_for_same_files(file_paths, repo_url)
 
     allowed_chunk_types: Set[str] = set()
     for code_type in requested_code_types:
@@ -285,3 +300,21 @@ def expand_context_for_agent(
     ordered = [by_id[pid] for pid in top_ids if pid in by_id]
 
     return [_normalize_chunk(point) for point in ordered]
+    source_ids = {str(p.id) for p in source_points}
+    scored: List[Candidate] = []
+    for point in candidates:
+        pid = str(point.id)
+        if pid in source_ids:
+            continue
+
+        p_payload = point.payload or {}
+        if allowed_chunk_types and p_payload.get("chunk_type") not in allowed_chunk_types:
+            continue
+
+        score = _relation_score(source_points, point)
+        if score <= 0:
+            continue
+        scored.append(Candidate(point=point, score=score))
+
+    scored.sort(key=lambda c: c.score, reverse=True)
+    return [_normalize_chunk(c.point) for c in scored[:max_chunks]]

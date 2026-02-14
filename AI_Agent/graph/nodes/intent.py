@@ -41,11 +41,15 @@ def intent_node(state: AgentState) -> AgentState:
         state["intent"] = heuristic
         return state
 
+
+
+def intent_node(state: AgentState) -> AgentState:
     prompt = render_prompt(
         "AI_Agent/prompts/intent.txt",
         {"user_query": state["user_query"]},
     )
     response = chat(prompt, max_tokens=20).strip()
+    from AI_Agent.schemas.intent import Intent
 
     try:
         state["intent"] = Intent(response)

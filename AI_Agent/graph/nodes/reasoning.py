@@ -33,6 +33,7 @@ def _build_context(chunks):
 
         body = "\n\n".join(
             f"[{c.file_path}:{c.start_line}-{c.end_line} | {c.code_type}]\n{_clip(c.content, MAX_CONTEXT_CHARS_PER_CHUNK)}"
+            f"[{c.file_path}:{c.start_line}-{c.end_line} | {c.code_type}]\n{c.content}"
             for c in file_chunks
         )
         sections.append(
@@ -46,18 +47,44 @@ def reasoning_node(state: AgentState) -> AgentState:
     approved_chunks = state["retrieved_chunks"] + state["expanded_chunks"] + state["file_chunks"]
     context = _build_context(approved_chunks)
 
+def _format_chat_history(history: list[dict]) -> str:
+    if not history:
+        return ""
+
+    formatted = []
+    for turn in history[-5:]:  # last 5 turns only
+        formatted.append(f"User: {turn['user_query']}")
+        formatted.append(f"Agent: {turn['response']}")
+
+    return "\n".join(formatted)
+
+
+def reasoning_node(state: AgentState) -> AgentState:
+    approved_chunks = (
+        state["retrieved_chunks"]
+        + state["expanded_chunks"]
+        + state["file_chunks"]
+    )
+
+    context = _build_context(approved_chunks)
+
+    # 🔹 Format conversation history
+    chat_history_str = "\n".join(
+    f"User: {t['user_query']}\nAgent: {t['response']}"
+    for t in state.get("chat_history", [])[-2:]
+)
+
+
     prompt = render_prompt(
         "AI_Agent/prompts/reasoning.txt",
         {
             "context": context,
             "user_query": state["user_query"],
+            "chat_history": chat_history_str,  # ✅ now injected
         },
     )
 
-    response = chat(prompt, max_tokens=REASONING_MAX_TOKENS)
+    response = chat(prompt)
     state["explanation"] = response
-
-    if state.get("session_id"):
-        memory.add_turn(state["session_id"], state["user_query"], response)
 
     return state

@@ -13,7 +13,9 @@ Rules:
 - Return ONLY the intent name.
 - Do NOT explain.
 - Do NOT add extra text.
-- If unsure, choose the closest intent.
+       - If unsure, choose the closest intent that is still safe.
+- If (and only if) the query is clearly illegal or unsafe as described above, DO NOT classify it; instead respond with:
+- "I cannot help with that request."
 
 User query:
 {{user_query}}

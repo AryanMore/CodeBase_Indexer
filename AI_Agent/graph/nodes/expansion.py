@@ -4,10 +4,19 @@ from AI_Agent.tools.rag import RAGClient
 from AI_Agent.utils.logger import get_logger
 
 expand_logger = get_logger("ContextExpansionAgent")
+import os
+
+from AI_Agent.graph.state import AgentState
+from AI_Agent.rulebook.validator import RulebookValidator, RulebookViolation
+from AI_Agent.tools.rag import RAGClient
 
 rag = RAGClient()
 validator = RulebookValidator()
 
+
+# Global expansion controls (per query), aligned with policy/plan.md.
+EXPANSION_BUDGET = int(os.getenv("EXPANSION_BUDGET", "4"))
+MAX_EXPANSION_DEPTH = int(os.getenv("MAX_EXPANSION_DEPTH", "1"))
 
 DEFAULT_EXPANSION_TYPES = ["py:imports", "py:class_header"]
 
@@ -32,6 +41,23 @@ def expansion_node(state: AgentState) -> AgentState:
 
     if not plan or not plan.requires_expansion:
         expand_logger.info("ContextExpansionAgent -> Expansion not required by plan")
+    plan = state["plan"]
+
+    if not plan or not plan.requires_expansion:
+        return state
+
+    # Budget/depth guard: this implementation supports a single expansion hop per query.
+    # If the configured budget is exhausted (or disabled via 0), skip expansion and
+    # let downstream reasoning work with the initial retrieved chunks only.
+    if EXPANSION_BUDGET <= 0 or MAX_EXPANSION_DEPTH <= 0:
+        state["expanded_chunks"] = []
+        # Do NOT overwrite an existing explanation if one is already present.
+        if not state.get("explanation"):
+            state["explanation"] = (
+                "Expansion budget or depth limit is exhausted for this query. "
+                "Answering using only the initially retrieved chunks. "
+                "If the answer seems incomplete, more context may be required."
+            )
         return state
 
     source_chunks = state["retrieved_chunks"]
@@ -45,6 +71,7 @@ def expansion_node(state: AgentState) -> AgentState:
         expand_logger.info(
             "ContextExpansionAgent -> No source chunk IDs available for expansion"
         )
+    if not source_ids:
         state["expanded_chunks"] = []
         return state
 
@@ -80,6 +107,7 @@ def expansion_node(state: AgentState) -> AgentState:
         expand_logger.warning(
             f"ContextExpansionAgent -> Rulebook violation: {str(e)}"
         )
+    except RulebookViolation as e:
         state["expanded_chunks"] = []
         state["explanation"] = str(e)
         return state
@@ -111,3 +139,5 @@ def expansion_node(state: AgentState) -> AgentState:
 
     return state
 
+    state["expanded_chunks"] = expanded
+    return state

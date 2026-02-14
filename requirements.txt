@@ -1,3 +1,4 @@
+
 ollama
 qdrant-client
 fastapi
@@ -13,3 +14,10 @@ requests
 tree_sitter
 tree_sitter_languages
 groq
+fastapi==0.104.1
+uvicorn==0.24.0
+requests==2.31.0
+python-dotenv==1.0.0
+ollama==0.6.1
+qdrant-client>=1.7.0
+>>>>>>> origin/memory-work

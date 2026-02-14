@@ -19,6 +19,8 @@ class RAGClient:
             chunks = retrieve_chunks_for_agent(query=query, top_k=top_k, repo_url=repo_url)
             return [Chunk(**c) for c in chunks]
 
+
+    def retrieve_chunks(self, query: str, top_k: int, repo_url: str):
         response = requests.post(
             f"{self.BASE_URL}/rag/retrieve",
             json={"repo_url": repo_url, "query": query, "top_k": top_k},

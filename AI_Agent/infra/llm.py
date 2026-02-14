@@ -1,6 +1,9 @@
 import json
 import os
 import re
+import logging
+import re
+import time
 from pathlib import Path
 
 import ollama
@@ -11,6 +14,9 @@ GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 
 _GROQ_CLIENTS = None
 _GROQ_START_INDEX = 0
+MODEL = "llama3.2:3b"
+
+logger = logging.getLogger("ai_agent.llm")
 
 
 def render_prompt(template_path: str, values: dict[str, str]) -> str:

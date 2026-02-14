@@ -12,7 +12,9 @@ function App() {
 
   const [page, setPage] = useState("landing");
 
-  const [repoUrl, setRepoUrl] = useState("");
+  const [repoUrl, setRepoUrl] = useState(
+    "https://github.com/khushb-glide/GitHub-Repo-Doc-Bot"
+  );
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
 

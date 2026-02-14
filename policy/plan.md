@@ -24,11 +24,11 @@ This document captures:
 
 ## 2.1 Separation of Responsibilities
 
-* **LLM** -> Reasoning + deciding when and what to expand
-* **Orchestrator** -> Enforcement + state management
-* **Expansion pipeline (module)** -> Legal validation + chunk resolution (functionally part of orchestrator)
-* **Rulebook** -> Static expansion permissions
-* **Formats** -> Static structural metadata
+* **LLM** → Reasoning + deciding when and what to expand
+* **Orchestrator** → Enforcement + state management
+* **Expansion pipeline (module)** → Legal validation + chunk resolution (functionally part of orchestrator)
+* **Rulebook** → Static expansion permissions
+* **Formats** → Static structural metadata
 
 No reasoning happens inside the orchestrator.
 No legality is decided by the LLM.
