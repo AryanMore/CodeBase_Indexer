@@ -238,7 +238,13 @@ npm install
 
 Set backend URL using an environment variable (optional, defaults to `http://localhost:8000`):
 ```bash
-export REACT_APP_API_URL="http://localhost:8000"
+src/config.js
+```
+
+Add the backend URL-
+```bash
+REACT_APP_API_URL="BACKEND_URL"
+
 ```
 ▶️ Start the Frontend
 

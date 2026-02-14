@@ -5,6 +5,8 @@ pydantic
 uvicorn
 python-dotenv
 pytest
+bs4
+tree_sitter_javascript
 pytest-cov
 bs4
 requests
