@@ -14,7 +14,7 @@ This project was built as a **capstone submission**, with a strong focus on **co
 * Structural chunking for Python and HTML
 * Vector-based retrieval using Qdrant vector database
 * Natural-language Q&A grounded in retrieved files
-* Clean, ChatGPT-style UI (ingest → chat)
+* Clean, ChatGPT-style UI (ingest -> chat)
 * End-to-end system tests
 
 ---
@@ -24,9 +24,9 @@ This project was built as a **capstone submission**, with a strong focus on **co
 The system follows a classic **RAG pipeline**:
 
 ```
-Repository → Chunking → Embeddings → Vector Store
+Repository -> Chunking -> Embeddings -> Vector Store
                                    ↓
-User Query → Query Embedding → Retrieval → LLM Answer
+User Query -> Query Embedding -> Retrieval -> LLM Answer
 ```
 
 ### Ingestion
