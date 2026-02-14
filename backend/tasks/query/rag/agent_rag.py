@@ -111,17 +111,48 @@ def _build_same_file_filter(
 ) -> Optional[Filter]:
     if not file_paths:
         return None
-def _fetch_points_for_same_files(file_paths: Set[str], repo_url: Optional[str]) -> List[Any]:
+
+    must = [
+        FieldCondition(key="file_path", match=MatchAny(any=list(file_paths)))
+    ]
+
+    if repo_url:
+        must.append(FieldCondition(key="repo_url", match=MatchValue(value=repo_url)))
+
+    if allowed_chunk_types:
+        must.append(
+            FieldCondition(key="chunk_type", match=MatchAny(any=list(allowed_chunk_types)))
+        )
+
+    return Filter(must=must)
+
+
+def _fetch_points_for_same_files(
+    file_paths: Set[str],
+    repo_url: Optional[str],
+    allowed_chunk_types: Optional[Set[str]] = None,
+) -> List[Any]:
+
     if not file_paths:
         return []
 
-    must = [FieldCondition(key="file_path", match=MatchAny(any=list(file_paths)))]
-    if repo_url:
-        must.append(FieldCondition(key="repo_url", match=MatchValue(value=repo_url)))
-    if allowed_chunk_types:
-        must.append(FieldCondition(key="chunk_type", match=MatchAny(any=list(allowed_chunk_types))))
+    client = get_qdrant_client()
 
-    return Filter(must=must)
+    query_filter = _build_same_file_filter(
+        file_paths=file_paths,
+        repo_url=repo_url,
+        allowed_chunk_types=allowed_chunk_types,
+    )
+
+    result = client.scroll(
+        collection_name=get_collection_name(),
+        limit=SCROLL_LIMIT,
+        scroll_filter=query_filter,
+        with_payload=True,
+    )
+
+    return result[0]
+
 
 
 def _fetch_points_for_same_files(

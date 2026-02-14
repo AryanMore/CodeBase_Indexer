@@ -47,27 +47,6 @@ class OrchestratorGraph:
         return normalized in {"approve", "approved", "yes push", "approve changes", "yes"}
 
     def invoke(self, state: AgentState) -> AgentState:
-
-        start_total = time.time()
-
-        orch_logger.info("=" * 90)
-        orch_logger.info("OrchestrationAgent -> Workflow started")
-        orch_logger.info(f"Session ID: {state.get('session_id')}")
-        orch_logger.info(f'User asked: "{state.get("user_query")}"')
-        orch_logger.info("=" * 90)
-
-        session_id = state.get("session_id")
-
-        # ===================== APPROVAL FLOW =====================
-
-        if session_id and self._is_approval_query(state["user_query"]):
-
-            orch_logger.info("OrchestrationAgent -> Approval flow triggered")
-
-            pending = memory.get_pending_diff(session_id)
-            if not pending:
-                orch_logger.warning(
-                    "OrchestrationAgent -> No pending changes found for approval"
         session_id = state.get("session_id")
 
         if session_id and self._is_approval_query(state["user_query"]):
@@ -87,98 +66,6 @@ class OrchestratorGraph:
             state["approved"] = True
 
             try:
-                apply_start = time.time()
-                apply_logger.info("ApplyAgent -> Applying approved changes...")
-                state = apply_node(state)
-                memory.clear_pending_diff(session_id)
-                memory.add_turn(session_id, state["user_query"], state["explanation"])
-                apply_logger.info(
-                    f"ApplyAgent -> Changes applied successfully "
-                    f"(duration={round(time.time()-apply_start,3)}s)"
-                )
-            except Exception as exc:
-                apply_logger.error(
-                    f"ApplyAgent -> Apply/push failed: {exc}"
-                )
-                state["explanation"] = f"Approval received, but apply/push failed: {exc}"
-
-            return state
-
-        # ===================== INTENT =====================
-
-        intent_logger.info("IntentAgent -> Analyzing user intent...")
-        intent_start = time.time()
-        state = intent_node(state)
-        intent_logger.info(
-            f"IntentAgent -> Intent classified as: {state['intent']} "
-            f"(duration={round(time.time()-intent_start,3)}s)"
-        )
-
-        # ===================== PLANNING =====================
-
-        plan_logger.info("PlanningAgent -> Creating execution strategy...")
-        plan_start = time.time()
-        state = planner_node(state)
-        plan_logger.info(
-            f"PlanningAgent -> Plan created successfully "
-            f"(duration={round(time.time()-plan_start,3)}s)"
-        )
-
-        # ===================== RETRIEVAL =====================
-
-        rag_logger.info("RAGAgent -> Querying vector store for relevant chunks...")
-        rag_start = time.time()
-        state = retrieval_node(state)
-
-        retrieved_count = len(state.get("retrieved_chunks", []))
-        rag_logger.info(
-            f"RAGAgent -> Retrieved {retrieved_count} chunks "
-            f"(duration={round(time.time()-rag_start,3)}s)"
-        )
-
-        # ===================== EXPANSION =====================
-
-        # Expansion logs handled inside expansion_node
-        state = expansion_node(state)
-
-        # ===================== FILE LOADING =====================
-
-        orch_logger.info("OrchestrationAgent -> Loading additional full files if required...")
-        file_start = time.time()
-        state = file_loader_node(state)
-        orch_logger.info(
-            f"OrchestrationAgent -> File loading completed "
-            f"(duration={round(time.time()-file_start,3)}s)"
-        )
-
-        # ===================== ROUTING =====================
-
-        route_logger.info("RoutingAgent -> Determining execution path...")
-
-        if state["intent"].value in {"Modify", "Refactor", "Debug"}:
-            route_logger.info("RoutingAgent -> Routed to ProposeAgent")
-            propose_start = time.time()
-            result = propose_node(state)
-            propose_logger.info(
-                f"ProposeAgent -> Proposal generated "
-                f"(duration={round(time.time()-propose_start,3)}s)"
-            )
-        else:
-            route_logger.info("RoutingAgent -> Routed to ReasoningAgent")
-            reason_start = time.time()
-            result = reasoning_node(state)
-            reason_logger.info(
-                f"ReasoningAgent -> Response generated "
-                f"(duration={round(time.time()-reason_start,3)}s)"
-            )
-
-        orch_logger.info(
-            f"OrchestrationAgent -> Workflow completed "
-            f"(total_duration={round(time.time()-start_total,3)}s)"
-        )
-        orch_logger.info("=" * 90)
-
-        return result
                 logger.info(
                     "session=%s step=apply_node status=start proposed_diff_id=%s",
                     session_id,

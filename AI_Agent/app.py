@@ -44,9 +44,6 @@ def run_agent(user_query: str, repo_url: str, session_id: str | None = None):
         "approved": False,
     }
 
-<<<<<<< HEAD
-    return graph.invoke(initial_state)
-=======
     logger.info(
         "session=%s agent_run_start user_query=%r repo_url=%s",
         session_id,
@@ -71,7 +68,6 @@ def run_agent(user_query: str, repo_url: str, session_id: str | None = None):
     )
 
     return state
->>>>>>> origin/memory-work
 
 
 if __name__ == "__main__":
