@@ -282,7 +282,6 @@ def expand_context_for_agent(
         collection_name=get_collection_name(),
         ids=source_chunk_ids,
         with_payload=CANDIDATE_META_FIELDS,
-        with_payload=True,
         with_vectors=False,
     )
     if not source_points:

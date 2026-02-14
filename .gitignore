@@ -43,3 +43,4 @@ data/
 
 # Logs
 *.log
+.repo_registry.json
