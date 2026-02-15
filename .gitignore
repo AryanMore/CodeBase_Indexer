@@ -26,6 +26,7 @@ Thumbs.db
 .pytest_cache/
 coverage.xml
 htmlcov/
+.coverage
 
 # =====================
 # Project-specific
@@ -40,6 +41,9 @@ progress.md
 
 # MongoDB local data (if any)
 data/
+
+# Local Development Files
+_local/
 
 # Logs
 *.log

@@ -1,289 +1,308 @@
-# Repo Doc Bot
+# Codebase Indexer
 
-Repo Doc Bot is a backend-driven system that allows users to **ingest a GitHub repository** and **ask natural-language questions about its codebase**.
-It uses **retrieval-augmented generation (RAG)** to ground answers in real code and markup extracted from the repository.
+### A Policy-Driven Code Reasoning Engine
 
-This project was built as a **capstone submission**, with a strong focus on **correctness, architectural clarity, and real-world design trade-offs**, rather than feature bloat.
+Codebase Indexer is a backend-frontend system for **structured understanding and reasoning over entire software repositories**.
 
----
+Unlike basic retrieval-augmented systems that rely on flat chunking, this project explores **policy-governed context expansion**, **semantic chunking**, and **controlled agentic retrieval** for accurate code comprehension.
 
-## ✨ Key Features
-
-* Ingest any public GitHub repository
-* Index the entire codebase locally
-* Structural chunking for Python and HTML
-* Vector-based retrieval using Qdrant vector database
-* Natural-language Q&A grounded in retrieved files
-* Clean, ChatGPT-style UI (ingest → chat)
-* End-to-end system tests
+The goal is not to replicate Cursor-style file mutation, but to investigate how repository information can be **stored, structured, retrieved, and expanded safely and systematically**.
 
 ---
 
-## 🧠 Architecture Overview
+## Core Idea
 
-The system follows a classic **RAG pipeline**:
+Most RAG systems treat source code as text.
 
-```
-Repository → Chunking → Embeddings → Vector Store
-                                   ↓
-User Query → Query Embedding → Retrieval → LLM Answer
-```
+Codebase Indexer treats it as **structured data with relationships**, enabling:
 
-### Ingestion
+* Semantic chunking (AST / DOM / Tree-Sitter based)
+* Relationship-aware expansion
+* Budget-constrained context growth
+* Rulebook-governed retrieval behavior
+* JSON-validated LLM orchestration
 
-* Full `git clone` of the target repository
-* File-type filtering:
-
-  * `.py`, `.html`, `.js`, `.md`, `.txt`
-* Ignored directories:
-
-  * `.git/`, `node_modules/`, `venv/`, `__pycache__/`
-* Repository is deleted after indexing
-
-Only **repo-relative paths** are stored (no local filesystem leakage).
+The focus is on **how information is modeled and accessed**, not on editing or mutating files.
 
 ---
 
-## 🧩 Structural Chunking (MVP+2)
+## System Overview
 
-### Python (`.py`)
+The system consists of:
 
-Python files are chunked using **AST-based structural parsing** in a single pass, preserving OOP hierarchy:
-
-Chunk priority order:
-
-1. Module docstring
-2. Imports (grouped)
-3. Classes (entire class body)
-4. Top-level functions (not inside classes)
-5. Remaining top-level code
-
-Each line of code belongs to **exactly one chunk**. Oversized chunks fall back to blind chunking.
-
----
-
-### HTML (`.html`)
-
-HTML files are chunked using **semantic DOM structure**:
-
-* `<main>` dominates and is chunked as a single unit (if present)
-* Otherwise, the following tags are chunked as complete subtrees:
-
-  * `<section>`, `<article>`, `<nav>`, `<form>`, `<header>`, `<footer>`
-* `<div>` is intentionally not treated as a chunk
-* Remaining content is grouped into a single fallback chunk
-
-This mirrors how humans reason about page structure while avoiding noisy container tags.
-
----
-
-### Other Files
-
-* JavaScript, Markdown, and text files use **blind chunking with overlap**
-* Blind chunking is also used as a fallback for oversized or invalid structured chunks
-
----
-
-## 🔍 Retrieval & Answering
-
-* Queries are embedded using Ollama (`nomic-embed-text`)
-* Retrieval uses brute-force cosine similarity over stored vectors
-* Top-K chunks are injected into the LLM prompt as context
-
-The LLM is instructed to answer **based on retrieved context**, avoiding hallucination when information is missing.
-
----
-
-## 💬 Conversational Behavior (Design Decision)
-
-The system currently implements **single-turn RAG**:
-
-* Each query is handled independently
-* No persistent chat history is stored by default
-
-This is a **conscious design choice** to prioritize correctness and grounding over conversational fluency.
-
-Conversational continuity (e.g. resolving references like "they") can be introduced by **contextualizing the query text before embedding** (lightweight conversational RAG). Full chat memory is intentionally deferred as a post-submission enhancement.
-
----
-
-## 🖥️ Tech Stack
-
-* **Backend**: FastAPI
-* **Frontend**: Vanilla HTML, CSS, React,JavaScript
-* **Vector Store**: Qdrant (open-source vector database for storing embeddings)
+* **Backend**: FastAPI (Python)
+* **Frontend**: React
+* **Vector Store**: Qdrant
 * **Embeddings**: Ollama (`nomic-embed-text`)
-* **LLM**: Groq (primary), Ollama fallback
-* **Parsing**: Python `ast`, BeautifulSoup
-* **Testing**: pytest (system-level tests)
+* **LLM**:
+
+  * Primary: Groq (`llama3.2-8b-instant`)
+  * Fallback: Local Ollama (`llama3.2-3b`)
+
+Users can:
+
+1. Ingest a public GitHub repository
+2. Query the indexed repository via chat
+3. Toggle policy-driven expansion on or off
 
 ---
 
-## 📁 Project Structure
+## Ingestion Pipeline
+
+### 1. Repository Clone
+
+The system clones the provided GitHub repository locally.
+
+### 2. Language-Aware Semantic Chunking
+
+Supported languages:
+
+* Python → AST parsing
+* JavaScript → Tree-Sitter
+* HTML → BeautifulSoup (DOM structure)
+
+All other file types use blind chunking with overlap.
+
+For supported languages, chunks are structured into semantic types such as:
+
+* Functions
+* Classes
+* Imports
+* Top-level code
+* DOM sections
+
+Chunk formats and metadata are defined in JSON policy files (e.g., `python.json`).
+This enables runtime modification of supported relationships without altering core dispatcher logic.
+
+### 3. Relationship Encoding
+
+Chunks may include metadata fields such as:
+
+* `identifier`
+* `uses`
+* `member_functions`
+* `file_scope`
+
+These are stored strictly as metadata to allow rule-driven expansion during retrieval.
+
+### 4. Embedding & Storage
+
+Chunks are embedded using:
 
 ```
-repo-doc-bot/
-│
-├── backend/
-│   ├── main.py
-│   ├── config.py
-│   ├── infra/
-│   │   ├── llm.py
-│   │   └── db.py
-│   └── tasks/
-│       ├── ingest/
-│       │   ├── ingest.py
-│       │   ├── repo_clone/
-│       │   ├── embedding/
-│       │   │   ├── embedding_blind.py
-│       │   │   ├── embedding_python.py
-│       │   │   ├── embedding_html.py
-│       │   │   └── dispatcher.py
-│       │   └── vector_store/
-│       └── query/
-│           ├── query.py
-│           ├── rag/
-│           └── answer/
-│
-├── frontend/
-│   ├── ingest.html
-│   ├── chat.html
-│   ├── styles.css
-│   ├── ingest.js
-│   └── chat.js
-│
-├── tests/
-│   ├── test_ingest.py
-│   └── test_query.py
-│
-├── pytest.ini
-├── requirements.txt
-├── .env (not committed)
-└── README.md
+nomic-embed-text (Ollama)
 ```
+
+Vectors are stored in Qdrant along with structured metadata.
 
 ---
 
-## 🚀 Running the Project
+## Retrieval & Policy-Driven Expansion
+
+After ingestion, users interact via a chat interface.
+
+The system operates in two modes:
+
+* Standard RAG
+* Expansion Agent Mode (default)
+
+---
+
+### Controlled Expansion Architecture
+
+Instead of blindly retrieving Top-K chunks, the system introduces:
+
+* A **rulebook per language**
+* A **budget counter**
+* A **depth counter**
+* Strict **JSON-only LLM outputs**
+
+Each chunk type defines:
+
+* Whether expansion is allowed
+* Which relationships may be followed
+* Cost of each expansion
+
+Example expansion rules:
+
+* Expand via `file_scope` (cost: 0)
+* Expand via `uses` (cost: 1)
+
+The LLM must respond in structured JSON:
+
+```json
+{
+  "action": "answer"
+}
+```
+
+or
+
+```json
+{
+  "action": "request-expansion",
+  "rule": "...",
+  "target_chunk": "...",
+  "identifier": "..."
+}
+```
+
+The orchestrator validates:
+
+* Rule legality
+* Budget availability
+* Depth limits
+* Format correctness
+
+Only valid expansions are executed.
+
+This prevents:
+
+* Unlimited context growth
+* Greedy expansion loops
+* Tunnel-vision over a single symbol
+* Invalid relationship traversal
+
+If constraints are violated, the model is forced to correct its output.
+
+---
+
+## Context Stitching
+
+If a semantic block (e.g., large function) was split due to size:
+
+* Retrieval automatically reconstructs and orders all related chunks
+* The LLM receives a complete logical unit
+
+This ensures semantic integrity even under size constraints.
+
+---
+
+## Conversational Behavior
+
+* Chat sessions persist during active use
+* Sessions are memory-based (not stored permanently)
+* Closing the session resets state
+* No long-term conversation history is retained
+
+---
+
+## Design Principles
+
+* Structure over plain text
+* Policy-driven retrieval
+* Explicit expansion control
+* Runtime language extensibility
+* Deterministic orchestration around non-deterministic models
+
+---
+
+## Setup Instructions
 
 ### Prerequisites
 
-* Python 3.10+ (3.11+ recommended)
-* Docker (for running Qdrant)
+* Python 3.10+
+* Node.js
+* Docker
 * Ollama installed and running
-* Git
 
-### Setup
+---
 
-**1. Start Qdrant (using Docker):**
+### 1. Start Qdrant (Docker)
 
 ```bash
 docker run -p 6333:6333 qdrant/qdrant
 ```
 
-This starts the Qdrant vector database on `localhost:6333`.
+---
 
-**2. Install Python dependencies:**
+### 2. Create `.env` file
+
+```
+QDRANT_HOST=localhost
+QDRANT_PORT=6333
+QDRANT_COLLECTION_NAME=code_embeddings
+USE_GROQ=true
+GROQ_API_KEY=<your_key>
+```
+
+---
+
+### 3. Install Backend Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-**Optional (Groq backend):**
+---
+
+### 4. Install Frontend Dependencies
 
 ```bash
-pip install groq
+cd frontend
+npm install
 ```
 
-Only needed if you set `USE_GROQ=true`.
+---
 
-**3. Create a `.env` file:**
-
-```env
-QDRANT_HOST=localhost
-QDRANT_PORT=6333
-QDRANT_COLLECTION_NAME=code_embeddings
-# Optional: only required when USE_GROQ=true
-USE_GROQ=false
-GROQ_API_KEY=your_key_here
-```
-
-**4. Start the backend:**
+### 5. Start Backend
 
 ```bash
 uvicorn backend.main:app --reload
 ```
 
-Open in browser:
+---
+
+### 6. Start Frontend
+
+```bash
+npm start
+```
+
+Frontend runs on:
+
+```
+http://localhost:3000
+```
+
+Backend runs on:
 
 ```
 http://localhost:8000
 ```
 
 ---
-🌐 Running the  Frontend 
 
-Go to the frontend folder
-
-```bash
-cd frontend
-
-```
-Install dependencies:
-```bash
-npm install
-
-```
-⚙️ Frontend Environment Configuration
-
-Set backend URL using an environment variable (optional, defaults to `http://localhost:8000`):
-```bash
-export REACT_APP_API_URL="http://localhost:8000"
-```
-▶️ Start the Frontend
-
-Run:
-```bash
-npm start
-
-```
-The frontend will start at:
-```bash
-http://localhost:3000/
-
-```
-
-In Chat, keep **"Use AI Agent (context expansion)"** enabled to route questions through the AI Agent orchestration (`/agent/query`) instead of plain `/query`.
-For code-modification requests, the AI Agent now returns a proposal first and will only apply + push after you explicitly reply **APPROVE** in chat.
----
-
-## 🧪 Running Tests
-
-Make sure Qdrant and Ollama are running.
-
-```bash
-pytest
-```
-
-Tests are **end-to-end system tests** that validate:
+## Current Scope
 
 * Repository ingestion
-* Vector indexing
-* Retrieval
-* LLM-based answering
+* Semantic chunking for Python, JS, HTML
+* Rule-governed expansion agent
+* Budget-controlled recursive retrieval
+* Dual LLM backend (Groq + local fallback)
+* Session-scoped conversational memory
 
 ---
 
-## 📌 Project Status
+## Out of Scope
 
-* ✅ MVP complete
-* ✅ MVP+1 (UI + tests) complete
-* ✅ MVP+2 (structural chunking) complete for .py and .html
-
-The project is **submission-ready** in its current form.
+* File editing or mutation
+* Automatic code patching
+* Long-term chat persistence
+* Enterprise-grade security hardening
 
 ---
 
-## 📄 License
+## Motivation
 
-This project was developed for academic purposes as part of a capstone submission.
+This project explores how large codebases can be:
+
+* Structured
+* Indexed
+* Queried
+* Expanded
+* Reasoned about
+
+under explicit, enforceable retrieval policies.
+
+It serves as a foundation for future work in controlled agentic code intelligence systems.
