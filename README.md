@@ -242,6 +242,14 @@ pip install -r requirements.txt
 cd frontend
 npm install
 ```
+Create the  file inside the `src` directory:
+ `config.js`
+
+Add the following:
+
+```js
+export const API_URL = "BackendURL";
+```
 
 ---
 
