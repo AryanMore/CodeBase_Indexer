@@ -1,4 +1,6 @@
-const API = process.env.REACT_APP_API_URL || "http://localhost:8000";
+import {API_URL} from "../config";
+
+const API = API_URL;
 
 export const apiGet = async (url) => {
   const res = await fetch(`${API}${url}`);
